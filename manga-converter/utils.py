@@ -12,7 +12,7 @@ def get_domain(url):
     Returns:
         string|None: domaine du site ou none
     """
-    pattern = r'https?:\/\/(?:www\.)?([^\/]+)'
+    pattern = r'https?:\/\/(?:www\.)?([^\/\.]+)'
     match = re.search(pattern, url)
     if match:
         return match.group(1)
