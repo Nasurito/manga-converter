@@ -1,5 +1,6 @@
+import re
 import utils
-import chapter
+from module.chapter import Chapter
 
 class Manga:
     """Cette classe est utilisé pour définir un manga, un manga possede plusieurs chapitres (objet de la classe chapitre)"""
@@ -9,22 +10,62 @@ class Manga:
         Args:
             link (string): lien du manga sur le site de scan
         """
-        self.manga_name,self.manga_chapter = self.get_info(link)
+        
+        manga_html_page = utils.get_page(link).text
+        
+        domain_name = utils.get_domain(link)
+        
+        if domain_name == "mangakatana":
+            self.manga_name,self.author,self.manga_genres,self.manga_chapter = self.get_info_from_mangakatana(manga_html_page)
+        if domain_name == "lelmanga":
+            self.manga_name,self.author,self.manga_genres,self.manga_chapter =self.get_info_from_lelmanga(manga_html_page)
+
+        print(self.manga_name,self.author,self.manga_genres,self.manga_chapter)
     
-    def get_info(self,link):
-        """
-        Cette fonction récupére les informations relative à un manga avec les différentes informations intéréssante tel que le nom du manga et la liste des chapitres
+    def get_info_from_mangakatana(self,html_page):
+        """Cette fonction récupére les informations relative a un manga si le lien fournis viens du site mangakatana
+
         Args:
-            link (_type_): lien du fichier
+            html_page (html): _description_
+
+        Returns:
+            _type_: _description_
         """
-        site = utils.get_domain(link)
-        page_fetched = utils.get_page(link)
+        manga_name=""
+        author=""
+        genres=""
+        chapters_list=[]
+
+        manga_name = re.search('<h1[^>]*class=["\'][^"\']*heading[^"\']*["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE).group(1)
+        author_search = re.search('<a class=["\']author["\'][^>]*>(.*?)<\/a>',html_page)
+        author = author_search.group(1)
         
-        if site == 'mangakatana':
-            """Si le site est mangakatana, on va chercher les informations à cette endroit"""
-       
-        elif site == 'lelmanga' :
-            """Si le site est lelmanga, on va chercher les informations à cette endroit"""
-        else:
-            print("Veuillez choisir un site supporté")
+        match_div =  re.search('<div class=["\']genres["\'][^>]*>(.*?)<\/div>', html_page, re.DOTALL)
+        genres_html = match_div.group(1)
+        # Récupére tout les genres
+        genres = re.findall('<a[^>]*>(.*?)<\/a>', genres_html)
+        # Extraire la première div avec la classe "chapters" qui est suivis de l'initialisation du tableau
+        pattern_div = r'<div class="chapters">.*?<table class="uk-table uk-table-striped"[^>]*>(.*?)</table>.*?</div>'
+        match_div = re.search(pattern_div, html_page, re.DOTALL)
+        # Récupérer le contenu de la table
+        chapters_html = match_div.group(1)
+        # Extraire tous les liens href à l'intérieur de la table
+        pattern_links = r'<a[^>]*href=["\'](https?://[^"\'<>]+)["\'][^>]*>'
         
+        chapters_link_found = re.findall(pattern_links, chapters_html)
+        
+        for chapter in chapters_link_found:
+            chapters_list.append(Chapter(chapter))
+
+        return manga_name, author,genres, chapters_list
+    
+    def get_info_from_lelmanga(self,html_page):
+        """Cette fonction récupére les informations d'un manga depuis le site www.lelmanga.com
+        Args:
+            html_page (html): correspond a la page html récupéré avec le lien fournis a la création du manga
+        """
+        
+        manga_name = re.search('<h1[^>]*class=["\']entry-title["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE)
+        author = ""
+        genres = []
+            
