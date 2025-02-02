@@ -1,6 +1,4 @@
-# Exemple d'utilisation
+from module.manga import Manga
+
 if __name__ == "__main__":
-    url = "https://www.example.com"
-    response = get_page(url)
-    if response:
-        print("Page fetched successfully:", response.status_code)
+    test = Manga("https://mangakatana.com/manga/kaiju-no-8.24869")
