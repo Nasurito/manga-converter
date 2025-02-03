@@ -31,6 +31,7 @@ def get_page(url_request):
     try:
         response = requests.get(url_request, timeout=20)  # Ajout d'un timeout
         response.raise_for_status()
+        response.encoding = 'utf-8'   
     except requests.exceptions.HTTPError as error:
         print("An HTTP error occurred:", error)
         response = None 
