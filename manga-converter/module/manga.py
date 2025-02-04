@@ -62,7 +62,7 @@ class Manga:
         chapters_link_found = re.findall(pattern_links, chapters_html)
         
         for link, data_num  in chapters_link_found:
-             chapters_list.append(Chapter(data_num,link))
+             chapters_list.append(Chapter(data_num,manga_name,link))
 
         return manga_name, author,genres, chapters_list
     
@@ -109,7 +109,7 @@ class Manga:
             chapters_link_found = re.findall(pattern_links, chapters_html)
         
         for data_num, link in chapters_link_found:
-             chapters_list.append(Chapter(data_num,link))
+             chapters_list.append(Chapter(data_num,manga_name,link))
 
         return manga_name, author,genres, chapters_list
     
