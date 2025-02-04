@@ -20,10 +20,13 @@ class Chapter:
         self.domain_name = utils.get_domain(link)
         self.pages_link = []
         self.pages_path = []
+        self.converted_chapters_path = None
+        if os.path.exists(f"./export/{self.manga_name}/chapter_{self.id()}.pdf"):
+            self.converted_chapters_path = f"./export/{self.manga_name}/chapter_{self.id()}.pdf"
     
     def id(self):
-        return float(self.id_chapter)    
-    
+        return int(self.id_chapter) if float(self.id_chapter).is_integer() else float(self.id_chapter)
+
     def download(self):
         """
         Cette méthode permet de télécharger les pages d'un chapitre d'un manga.
@@ -42,36 +45,49 @@ class Chapter:
             bool: `True` si le téléchargement a réussi (pages et images récupérées et téléchargées correctement),
                 `False` en cas d'échec (par exemple, si les liens des pages ou les images sont manquants ou incorrects).
         """
-        # Si la page HTML du chapitre n'a pas encore été récupérée
-        if self.chapter_html_page == None :
-            # Récupération de la page HTML du chapitre via un utilitaire (extraction du contenu texte)
-            self.chapter_html_page = utils.get_page(self.chapter_html_link).text
-            # Suppression des espaces inutiles dans le HTML pour nettoyer le contenu
-            self.chapter_html_page = re.sub(r'\s+', ' ', self.chapter_html_page)
+        if self.converted_chapters_path == None :
+            # Si la page HTML du chapitre n'a pas encore été récupérée
+            if self.chapter_html_page == None :
+                # Récupération de la page HTML du chapitre via un utilitaire (extraction du contenu texte)
+                self.chapter_html_page = utils.get_page(self.chapter_html_link).text
+                # Suppression des espaces inutiles dans le HTML pour nettoyer le contenu
+                self.chapter_html_page = re.sub(r'\s+', ' ', self.chapter_html_page)
 
-        # Si la liste des liens des pages est vide (c'est-à-dire qu'elles n'ont pas encore été extraites)
-        if self.pages_link == [] :
-            # Selon le domaine (site d'origine), on utilise la méthode appropriée pour extraire les liens des pages d'images
-            if self.domain_name == "mangakatana":
-                self.pages_link = self.__get_pages_link_from_mangakatana()
-            elif self.domain_name == "lelmanga":     
-                self.pages_link = self.__get_pages_link_from_lelmanga()
+            # Si la liste des liens des pages est vide (c'est-à-dire qu'elles n'ont pas encore été extraites)
+            if self.pages_link == [] :
+                # Selon le domaine (site d'origine), on utilise la méthode appropriée pour extraire les liens des pages d'images
+                if self.domain_name == "mangakatana":
+                    self.pages_link = self.__get_pages_link_from_mangakatana()
+                elif self.domain_name == "lelmanga":     
+                    self.pages_link = self.__get_pages_link_from_lelmanga()
 
-        # Si les chemins des images n'ont pas encore été téléchargés
-        if self.pages_path == []:
-            # Appel de la méthode pour télécharger les images du chapitre
-            self.pages_path = self.__download_chapter_images()
+            # Si les chemins des images n'ont pas encore été téléchargés
+            if self.pages_path == []:
+                # Appel de la méthode pour télécharger les images du chapitre
+                self.pages_path = self.__download_chapter_images()
 
-        # Si les liens des pages ou les chemins des images sont manquants, on retourne `False` (échec du téléchargement)
-        if self.pages_path == None or self.pages_link == None:
-            return False
+            # Si les liens des pages ou les chemins des images sont manquants, on retourne `False` (échec du téléchargement)
+            if self.pages_path == None or self.pages_link == None:
+                return False
+            
+            if self.__convert_to_pdf() == False:
+                return False
 
-        # Si le nombre de liens d'images ne correspond pas au nombre d'images téléchargées, on retourne `False`
-        if len(self.pages_link) != len(self.pages_path):
-            return False
+            # Supprime les fichiers temporaires pour le chapitre
+            # Créer un dossier racine pour le manga dans le répertoire temporaire (en utilisant le nom du manga)
+            root_dir = tempfile.gettempdir()+f"/{self.manga_name}/chapter_{self.id()}"
+            utils.remove_temp_folder(root_dir)
 
-        # Si toutes les étapes ont réussi, on retourne `True`
-        return True
+                
+            # Si le nombre de liens d'images ne correspond pas au nombre d'images téléchargées, on retourne `False`
+            if len(self.pages_link) != len(self.pages_path):
+                return False
+
+            # Si toutes les étapes ont réussi, on retourne `True`
+            return True
+        else :
+            print (f"Chapter {self.id()} is already downloaded")
+            return True
 
     def __get_pages_link_from_mangakatana(self):
         """
@@ -92,8 +108,7 @@ class Chapter:
         # Si une correspondance est trouvée, on renvoie le contenu du tableau de liens
         if match is not None:
             return eval(match.group(1))  # Evaluer la chaîne de caractères en un tableau Python
-        
- 
+
     def __get_pages_link_from_lelmanga(self):
         """
         Cette méthode récupère les liens de toutes les pages d'un chapitre du site lelmanga.com.
@@ -133,17 +148,31 @@ class Chapter:
         downloaded_images = []  # Liste pour stocker les chemins locaux des images téléchargées
 
         # Télécharger chaque image du chapitre et enregistrer dans le dossier du chapitre
-        for index, url in enumerate(self.pages_link):
+        for index, url in enumerate(self.pages_link,1):
             # Définir le chemin où l'image sera enregistrée (nom du fichier basé sur l'index)
             image_path = os.path.join(chapter_dir, f"{index}.jpg")
             
             # Télécharger l'image et la sauvegarder
-            utils.download_image(url, image_path)
-            
-            # Ajouter le chemin de l'image téléchargée à la liste
-            downloaded_images.append(image_path)
+            if utils.download_image(url, image_path):
+                # Ajouter le chemin de l'image téléchargée à la liste
+                downloaded_images.append(image_path)
 
         # Retourner la liste des chemins des images téléchargées
         return downloaded_images
 
+    def __convert_to_pdf(self):
+        """
+        Convertit les images du chapitre en un fichier PDF et l'enregistre dans le dossier export.
+        """        
+        # Définir le dossier d'exportation
+        root_dir = os.path.join("./export", self.manga_name)
+        os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
+        path_for_convertion = root_dir+f"/chapter_{self.id()}.pdf"
         
+        if self.converted_chapters_path == None:
+            # Convertir les images en PDF
+            self.converted_chapters_path = path_for_convertion
+            return utils.images_to_pdf(self.pages_path,path_for_convertion )
+        else :
+            print (f"Chapter {self.id()} is already converted")
+            return True
