@@ -1,3 +1,4 @@
+import os
 import re
 import img2pdf
 import requests
@@ -45,6 +46,25 @@ def get_page(url_request):
         print("An unexpected error occurred:", error)
         response = None
     return response # Retourner le resultat de la requete
+
+def remove_temp_folder(folder_path):
+    """Supprime un dossier et son contenu sans utiliser shutil."""
+    if os.path.exists(folder_path):
+        # Supprimer tous les fichiers dans le dossier
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            if os.path.isfile(file_path):
+                os.remove(file_path)  # Supprime le fichier
+            elif os.path.isdir(file_path):
+                remove_temp_folder(file_path)  # Supprime les sous-dossiers récursivement
+
+        # Après avoir supprimé les fichiers et sous-dossiers, supprimer le dossier lui-même
+        os.rmdir(folder_path)
+        print(f"Dossier supprimé : {folder_path}")
+    else:
+        print(f"Le dossier {folder_path} n'existe pas.")
+
+
 
 def download_image(url, filename):
     """
