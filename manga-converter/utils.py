@@ -48,7 +48,6 @@ def get_page(url_request):
     return response # Retourner le resultat de la requete
 
 def remove_temp_folder(folder_path):
-    """Supprime un dossier et son contenu sans utiliser shutil."""
     if os.path.exists(folder_path):
         # Supprimer tous les fichiers dans le dossier
         for filename in os.listdir(folder_path):
@@ -60,7 +59,7 @@ def remove_temp_folder(folder_path):
 
         # Après avoir supprimé les fichiers et sous-dossiers, supprimer le dossier lui-même
         os.rmdir(folder_path)
-        print(f"Dossier supprimé : {folder_path}")
+        #print(f"Dossier supprimé : {folder_path}")
     else:
         print(f"Le dossier {folder_path} n'existe pas.")
 
@@ -98,7 +97,7 @@ def images_to_pdf(img_list, output_pdf):
         bool: True si la conversion réussit, False sinon.
     """
     try:
-        with open(output_pdf, "wb") as f:
+        with open(output_pdf, "xb") as f:
             f.write(img2pdf.convert(img_list))
         print(f"✅ PDF créé : {output_pdf}")
         return True
