@@ -166,5 +166,32 @@ class Manga:
         # Filtrer les chapitres à télécharger et les télécharger directement
         for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
             self.download_chapter(chapter.id())
+            
+    def convert_to_epub(self, chapter_start, chapter_end):
+        """
+        Convertit un ou plusieurs chapitres en EPUB.
 
+        Args:
+            chapter_start (int): ID du premier chapitre.
+            chapter_end (int): ID du dernier chapitre.
+
+        Returns:
+            bool: True si la conversion a réussi pour au moins un chapitre, False sinon.
+        """
+        success = False  # Indicateur de succès
+        # Si un seul chapitre est demandé
+        if chapter_start == chapter_end:
+            chapter_to_convert = next(filter(lambda c: c.id() == chapter_start, self.manga_chapters), None)
+            if chapter_to_convert:
+                success = chapter_to_convert.convert_pdf_to_ebook()
+        else:
+            # Correction des bornes au cas où elles sont inversées
+            start, end = min(chapter_start, chapter_end), max(chapter_start, chapter_end)
+
+            # Convertir les chapitres dans la plage donnée
+            for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
+                success = chapter.convert_pdf_to_ebook() or success
+        return success
+
+        
         

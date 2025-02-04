@@ -3,7 +3,6 @@ import os
 import tempfile
 import utils
 
-
 class Chapter:
     """Cette classe est utilisé pour définir un chapitre dans un manga, un chapitre posséde plusieurs pages (image récupérée depuis le site)"""
     def __init__(self,id,manga_name,link):
@@ -21,8 +20,8 @@ class Chapter:
         self.pages_link = []
         self.pages_path = []
         self.converted_chapters_path = None
-        if os.path.exists(f"./export/{self.manga_name}/chapter_{self.id()}.pdf"):
-            self.converted_chapters_path = f"./export/{self.manga_name}/chapter_{self.id()}.pdf"
+        if os.path.exists(f"./export/{self.manga_name}/pdf/chapter_{self.id()}.pdf"):
+            self.converted_chapters_path = f"./export/{self.manga_name}/pdf/chapter_{self.id()}.pdf"
     
     def id(self):
         return int(self.id_chapter) if float(self.id_chapter).is_integer() else float(self.id_chapter)
@@ -167,7 +166,7 @@ class Chapter:
         # Définir le dossier d'exportation
         root_dir = os.path.join("./export", self.manga_name)
         os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
-        path_for_convertion = root_dir+f"/chapter_{self.id()}.pdf"
+        path_for_convertion = root_dir+f"/pdf/chapter_{self.id()}.pdf"
         
         if self.converted_chapters_path == None:
             # Convertir les images en PDF
@@ -176,3 +175,6 @@ class Chapter:
         else :
             print (f"Chapter {self.id()} is already converted")
             return True
+    def convert_pdf_to_ebook(self):
+        """_summary_
+        """

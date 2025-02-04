@@ -7,3 +7,4 @@ if __name__ == "__main__":
     test = Manga("https://www.lelmanga.com/manga/jujutsu-kaisen")
     test.review()
     test.download_chapters(1,271.5)
+    test.convert_to_epub(1,271.5)
