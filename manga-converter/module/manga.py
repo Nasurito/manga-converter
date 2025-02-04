@@ -5,7 +5,7 @@ from module.chapter import Chapter
 class Manga:
     """Cette classe est utilisé pour définir un manga, un manga possede plusieurs chapitres (objet de la classe chapitre)"""
     def __init__(self,link):
-        """Cette fonction est appalée à chaque création d'un manga, elle permet de récupéré les informations en fonctions du lien et des sites supporté
+        """Cette methode est appalée à chaque création d'un manga, elle permet de récupéré les informations en fonction du lien et des sites supporté
 
         Args:
             link (string): lien du manga sur le site de scan
@@ -13,19 +13,17 @@ class Manga:
         
         manga_html_page = utils.get_page(link).text
         
-        domain_name = utils.get_domain(link)
+        self.domain_name = utils.get_domain(link)
         
-        if domain_name == "mangakatana":
-            self.manga_name,self.author,self.manga_genres,self.manga_chapter = self.get_info_from_mangakatana(manga_html_page)
-        if domain_name == "lelmanga":
-            self.manga_name,self.author,self.manga_genres,self.manga_chapter = self.get_info_from_lelmanga(manga_html_page)
+        if self.domain_name == "mangakatana":
+            self.manga_name,self.author,self.manga_genres,self.manga_chapters = self.__get_info_from_mangakatana(manga_html_page)
+        elif self.domain_name == "lelmanga":
+            self.manga_name,self.author,self.manga_genres,self.manga_chapters = self.__get_info_from_lelmanga(manga_html_page)
         else:
             raise Exception("Le site utilisé n'est pas supporté par le programme")
-
-        print(self.manga_name,self.author,self.manga_genres,self.manga_chapter)
     
-    def get_info_from_mangakatana(self,html_page):
-        """Cette fonction récupére les informations relative a un manga si le lien fournis viens du site mangakatana
+    def __get_info_from_mangakatana(self,html_page):
+        """Cette methode privée récupére les informations relative a un manga si le lien fournis viens du site mangakatana
 
         Args:
             html_page (html): correspond à la page html récupéré avec le lien fournis a la création du manga
@@ -49,23 +47,27 @@ class Manga:
         genres_html = match_div.group(1)
         # Récupére tout les genres
         genres = re.findall('<a[^>]*>(.*?)<\/a>', genres_html)
+        
+        
+        # Nettoyer les espaces et tabulations inutiles dans le HTML
+        clean_html = re.sub(r'\s+', ' ', html_page)
         # Extraire la première div avec la classe "chapters" qui est suivis de l'initialisation du tableau
         pattern_div = r'<div class="chapters">.*?<table class="uk-table uk-table-striped"[^>]*>(.*?)</table>.*?</div>'
-        match_div = re.search(pattern_div, html_page, re.DOTALL)
+        match_div = re.search(pattern_div, clean_html, re.DOTALL)
         # Récupérer le contenu de la table
         chapters_html = match_div.group(1)
         # Extraire tous les liens href à l'intérieur de la table
-        pattern_links = r'<a[^>]*href=["\'](https?://[^"\'<>]+)["\'][^>]*>'
-        
+        pattern_links = r'<a[^>]*href=["\'](https?://[^"\'<>]+)["\'][^>]*>\s*Chapter\s*(\d+)'
+  
         chapters_link_found = re.findall(pattern_links, chapters_html)
         
-        for chapter in chapters_link_found:
-             chapters_list.append(Chapter(chapter))
+        for link, data_num  in chapters_link_found:
+             chapters_list.append(Chapter(data_num,link))
 
         return manga_name, author,genres, chapters_list
     
-    def get_info_from_lelmanga(self,html_page):
-        """Cette fonction récupére les informations d'un manga depuis le site www.lelmanga.com
+    def __get_info_from_lelmanga(self,html_page):
+        """Cette methode privée récupére les informations d'un manga depuis le site www.lelmanga.com
         Args:
             html_page (html): correspond a la page html récupéré avec le lien fournis a la création du manga
         Returns:
@@ -100,14 +102,54 @@ class Manga:
         match_div = re.search(pattern_div, clean_html, re.DOTALL)
         # Si la div est trouvée, extraire les liens des chapitres
         if match_div:
-            chapter_html = match_div.group(1)  # Contenu de <ul> avec les chapitres
+            chapters_html = match_div.group(1)  # Contenu de <ul> avec les chapitres
             # Regex pour extraire tous les liens dans les balises <a>, sans se baser sur le nom du manga
-            pattern_links = r'href=["\'](https://www.lelmanga.com/[^"\']+)["\']'
-            chapter_links = re.findall(pattern_links, chapter_html)
+            pattern_links = r'<li data-num=["\']([\d\.]+)["\'].*?<a href=["\'](https://www\.lelmanga\.com/[^"\']+)["\']'
+
+            chapters_link_found = re.findall(pattern_links, chapters_html)
         
-        for chapters in chapter_links:
-            chapters_list.append(Chapter(chapters))
+        for data_num, link in chapters_link_found:
+             chapters_list.append(Chapter(data_num,link))
 
         return manga_name, author,genres, chapters_list
+    
+    def review(self):
+        """
+        Cette fonction permet d'afficher les informations relative a un manga sous cette forme :
+        Nom                : lorem ipsum
+        Autheur            : Lorem ipsum
+        Genres             : lorem, ipsume, dolores
+        Nombre de chapitre : xxx
+        """
+        print("Nom                :",self.manga_name)
+        print("Autheur            :",self.author)
+        print("Genres             :",self.manga_genres)
         
-            
+        higher_id = 0
+        for chapter in self.manga_chapters:
+            higher_id = chapter.id() if chapter.id() >= higher_id else higher_id
+        
+        print("Nombre de chapitre :",higher_id)
+        print("\n")
+    
+    def download_chapter(self, chapter_number):
+        """Cette fonction est utilisé pour télécharger un chaptire
+
+        Args:
+            chapter_number float: numéro du chaptire à téléchargé
+        """
+        for chapter in self.manga_chapters:
+            chapter_to_download = chapter if chapter.id() == chapter_number else None
+            if chapter_to_download is not None:
+                break
+        
+        return True
+        
+        
+    def download_chapters(self, chapter_start,chapter_end):
+        """Cette Methode est utilisée pour télécharcher une range de chapitres
+
+        Args:
+            chapter_start float: numéro du premier chapitre a télécharger (compris)
+            chapter_end float: numéro du dernier chapitre a télécharger (compris)
+        """
