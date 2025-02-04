@@ -80,21 +80,31 @@ def download_image(url, filename):
         with open(filename, "wb") as file:  # Ouvrir en mode binaire
             file.write(response.content)  # Écrire le contenu brut de l'image
         
-        print(f"Image téléchargée : {filename}")
+        #print(f"Image téléchargée : {filename}")
+        return True
     except requests.exceptions.RequestException as error:
         print("Erreur lors du téléchargement :", error)
+        return False
 
 def images_to_pdf(img_list, output_pdf):
     """
-    Cette fonction prend en paramètre une liste d'image et un nom de fichier pour la sortie pdf
+    Convertit une liste d'images en un fichier PDF.
 
     Args:
-        img_list (array[string]): une liste contenant le lien vers les images à transformer en pdf
-        output_pdf (string): sortie pdf des images combinées
+        img_list (list[str]): Liste des chemins des images à convertir.
+        output_pdf (str): Chemin du fichier PDF de sortie.
+
+    Returns:
+        bool: True si la conversion réussit, False sinon.
     """
-    with open(output_pdf, "wb") as f:
-        f.write(img2pdf.convert(img_list))
-    print(f"PDF créé : {output_pdf}")
+    try:
+        with open(output_pdf, "wb") as f:
+            f.write(img2pdf.convert(img_list))
+        print(f"✅ PDF créé : {output_pdf}")
+        return True
+    except Exception as e:
+        print(f"❌ Erreur lors de la création du PDF : {e}")
+        return False
     
 def convert_pdf_to_epub(input_pdf, output_epub):
     """
