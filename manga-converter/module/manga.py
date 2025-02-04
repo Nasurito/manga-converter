@@ -133,23 +133,38 @@ class Manga:
         print("\n")
     
     def download_chapter(self, chapter_number):
-        """Cette fonction est utilisé pour télécharger un chaptire
+        """Télécharge un chapitre spécifique.
 
         Args:
-            chapter_number float: numéro du chaptire à téléchargé
+            chapter_number (float): Numéro du chapitre à télécharger.
         """
-        for chapter in self.manga_chapters:
-            chapter_to_download = chapter if chapter.id() == chapter_number else None
-            if chapter_to_download is not None:
-                break
+        chapter_to_download = next((chapter for chapter in self.manga_chapters if chapter.id() == chapter_number), None)
+
+        if chapter_to_download.download():
+            print(f"Chapitre {chapter_to_download.id()}, téléchargé")
+            return True
         
-        return True
-        
-        
-    def download_chapters(self, chapter_start,chapter_end):
-        """Cette Methode est utilisée pour télécharcher une range de chapitres
+        print(f"Erreur de téléchargement du chapitre {chapter_to_download.id()}")
+        return False
+
+
+    def download_chapters(self, chapter_start, chapter_end):
+        """Télécharge une plage de chapitres.
 
         Args:
-            chapter_start float: numéro du premier chapitre a télécharger (compris)
-            chapter_end float: numéro du dernier chapitre a télécharger (compris)
+            chapter_start (float): Numéro du premier chapitre à télécharger (inclus).
+            chapter_end (float): Numéro du dernier chapitre à télécharger (inclus).
         """
+
+        # Si un seul chapitre est demandé, appeler la fonction correspondante
+        if chapter_start == chapter_end:
+            return self.download_chapter(chapter_start)
+
+        # Correction si l'utilisateur a inversé les bornes
+        start, end = min(chapter_start, chapter_end), max(chapter_start, chapter_end)
+
+        # Filtrer les chapitres à télécharger et les télécharger directement
+        for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
+            self.download_chapter(chapter.id())
+
+        
