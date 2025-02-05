@@ -164,9 +164,9 @@ class Chapter:
         Convertit les images du chapitre en un fichier PDF et l'enregistre dans le dossier export.
         """        
         # Définir le dossier d'exportation
-        root_dir = os.path.join("./export", self.manga_name)
+        root_dir = os.path.join("./export", self.manga_name+"/pdf/")
         os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
-        path_for_convertion = root_dir+f"/pdf/chapter_{self.id()}.pdf"
+        path_for_convertion = root_dir+f"chapter_{self.id()}.pdf"
         
         if self.converted_chapters_path == None:
             # Convertir les images en PDF

@@ -85,6 +85,8 @@ def download_image(url, filename):
         print("Erreur lors du téléchargement :", error)
         return False
 
+import img2pdf
+
 def images_to_pdf(img_list, output_pdf):
     """
     Convertit une liste d'images en un fichier PDF.
@@ -97,13 +99,17 @@ def images_to_pdf(img_list, output_pdf):
         bool: True si la conversion réussit, False sinon.
     """
     try:
-        with open(output_pdf, "xb") as f:
+        with open(output_pdf, "xb") as f:  # Utilisation de "xb" pour éviter l'écrasement
             f.write(img2pdf.convert(img_list))
         print(f"✅ PDF créé : {output_pdf}")
         return True
+    except FileExistsError:
+        print(f"❌ Erreur : le fichier '{output_pdf}' existe déjà.")
+        return False
     except Exception as e:
         print(f"❌ Erreur lors de la création du PDF : {e}")
         return False
+
     
 def convert_pdf_to_epub(input_pdf, output_epub):
     """
