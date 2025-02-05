@@ -85,8 +85,6 @@ def download_image(url, filename):
         print("Erreur lors du téléchargement :", error)
         return False
 
-import img2pdf
-
 def images_to_pdf(img_list, output_pdf):
     """
     Convertit une liste d'images en un fichier PDF.
@@ -99,7 +97,7 @@ def images_to_pdf(img_list, output_pdf):
         bool: True si la conversion réussit, False sinon.
     """
     try:
-        with open(output_pdf, "xb") as f:  # Utilisation de "xb" pour éviter l'écrasement
+        with open(output_pdf, "xb") as f:  
             f.write(img2pdf.convert(img_list))
         print(f"✅ PDF créé : {output_pdf}")
         return True
