@@ -1,5 +1,6 @@
 import re
 import utils
+import subprocess
 from module.chapter import Chapter
 
 class Manga:
@@ -164,35 +165,58 @@ class Manga:
         # Correction si l'utilisateur a inversé les bornes
         start, end = min(chapter_start, chapter_end), max(chapter_start, chapter_end)
 
+        converted_chapter = []
         # Filtrer les chapitres à télécharger et les télécharger directement
         for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
             self.download_chapter(chapter.id(),format)
-            
-    def convert_to_epub(self, chapter_start, chapter_end):
+
+            converted_chapter.append(chapter.get_convetion_path(format))
+
+        
+        self.convert_to_epub(converted_chapter)
+
+    def convert_to_epub(self, chapter_path):
         """
         Convertit un ou plusieurs chapitres en EPUB.
 
         Args:
-            chapter_start (int): ID du premier chapitre.
-            chapter_end (int): ID du dernier chapitre.
+            chapter_path (list): Liste des chemins des fichiers de chapitres.
 
         Returns:
             bool: True si la conversion a réussi pour au moins un chapitre, False sinon.
         """
-        success = False  # Indicateur de succès
-        # Si un seul chapitre est demandé
-        if chapter_start == chapter_end:
-            chapter_to_convert = next(filter(lambda c: c.id() == chapter_start, self.manga_chapters), None)
-            if chapter_to_convert:
-                success = chapter_to_convert.convert_pdf_to_ebook()
-        else:
-            # Correction des bornes au cas où elles sont inversées
-            start, end = min(chapter_start, chapter_end), max(chapter_start, chapter_end)
-
-            # Convertir les chapitres dans la plage donnée
-            for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
-                success = chapter.convert_pdf_to_ebook() or success
-        return success
-
         
+        fichier_sortie = f"./export/{self.manga_name}/{self.manga_name}.epub"
         
+        # Commande Calibre pour convertir les fichiers CBR en un seul EPUB
+        command = [
+            "ebook-convert"
+        ] + chapter_path + [fichier_sortie]  # On ajoute les fichiers et le fichier de sortie
+
+        # Exécution de la commande
+        result = subprocess.run(command, capture_output=True)
+
+        # Vérification du succès de la conversion
+        if result.returncode != 0:
+            print(f"Erreur lors de la conversion : {result.stderr.decode()}")
+            return False
+
+        # Commande pour ajouter les métadonnées à l'EPUB
+        command = [
+            "ebook-meta", 
+            fichier_sortie,
+            "--title", self.manga_name,
+            "--author", self.author,
+            #"--cover", image_couverture,
+            "--tags", ' , '.join(map(str, self.manga_genres))
+        ]
+        
+        # Exécution de la commande
+        result = subprocess.run(command, capture_output=True)
+        
+        # Vérification du succès de l'ajout des métadonnées
+        if result.returncode != 0:
+            print(f"Erreur lors de l'ajout des métadonnées : {result.stderr.decode()}")
+            return False
+
+        return True

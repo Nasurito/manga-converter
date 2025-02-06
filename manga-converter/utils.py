@@ -109,23 +109,6 @@ def images_to_pdf(img_list, output_pdf):
     except Exception as e:
         print(f"❌ Erreur lors de la création du PDF : {e}")
         return False
-    
-def rename_images_for_order(folder):
-    """Renomme les images en ajoutant des zéros devant les numéros et retourne la liste des nouveaux noms."""
-    files = sorted(os.listdir(folder), key=lambda x: int(os.path.splitext(x)[0]))  # Tri numérique
-    renamed_files = []
-
-    for i, file in enumerate(files, start=1):
-        ext = os.path.splitext(file)[1]
-        new_name = f"{i:03d}{ext}"  # "001.jpg", "002.jpg", etc.
-        old_path = os.path.join(folder, file)
-        new_path = os.path.join(folder, new_name)
-
-        os.rename(old_path, new_path)
-        renamed_files.append(new_path)
-
-    print("Fichiers renommés avec des zéros pour un tri correct !")
-    return renamed_files  # Retourne la liste des nouveaux fichiers
 
 def images_to_cbr(image_paths, cbr_path):
     """Crée un fichier CBR (Comic Book RAR) sous Ubuntu en utilisant rar ou 7z."""
