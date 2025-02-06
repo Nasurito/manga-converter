@@ -132,15 +132,16 @@ class Manga:
         print("Nombre de chapitre :",higher_id)
         print("\n")
     
-    def download_chapter(self, chapter_number):
-        """Télécharge un chapitre spécifique.
+    def download_chapter(self, chapter_number,format="CBZ"):
+        """Télécharge un chapitre spécifique dans le bon format
 
         Args:
             chapter_number (float): Numéro du chapitre à télécharger.
         """
+
         chapter_to_download = next((chapter for chapter in self.manga_chapters if chapter.id() == chapter_number), None)
 
-        if chapter_to_download.download():
+        if chapter_to_download.download(format):
             print(f"Chapitre {chapter_to_download.id()}, téléchargé")
             return True
         
@@ -148,7 +149,7 @@ class Manga:
         return False
 
 
-    def download_chapters(self, chapter_start, chapter_end):
+    def download_chapters(self, chapter_start, chapter_end,format="CBZ"):
         """Télécharge une plage de chapitres.
 
         Args:
@@ -158,14 +159,14 @@ class Manga:
 
         # Si un seul chapitre est demandé, appeler la fonction correspondante
         if chapter_start == chapter_end:
-            return self.download_chapter(chapter_start)
+            return self.download_chapter(chapter_start,format)
 
         # Correction si l'utilisateur a inversé les bornes
         start, end = min(chapter_start, chapter_end), max(chapter_start, chapter_end)
 
         # Filtrer les chapitres à télécharger et les télécharger directement
         for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
-            self.download_chapter(chapter.id())
+            self.download_chapter(chapter.id(),format)
             
     def convert_to_epub(self, chapter_start, chapter_end):
         """

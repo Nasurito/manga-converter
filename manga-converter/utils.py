@@ -1,6 +1,8 @@
 import os
 import re
+import shutil
 import img2pdf
+import zipfile
 import requests
 import subprocess
 
@@ -107,13 +109,45 @@ def images_to_pdf(img_list, output_pdf):
     except Exception as e:
         print(f"❌ Erreur lors de la création du PDF : {e}")
         return False
-
     
-def convert_pdf_to_epub(input_pdf, output_epub):
-    """
-    Cette fonction utilise la commande bash "ebook-convert" (avec subproscess)  utilisée avec calibre pour convertir un pdf en ebook
-    Args:
-        input_pdf (_type_): lien du pdf a ajouter en entrée
-        output_epub (_type_): emplacement voulu de l'ebook en sortie
-    """
-    subprocess.run(['ebook-convert', input_pdf, output_epub])
+def rename_images_for_order(folder):
+    """Renomme les images en ajoutant des zéros devant les numéros et retourne la liste des nouveaux noms."""
+    files = sorted(os.listdir(folder), key=lambda x: int(os.path.splitext(x)[0]))  # Tri numérique
+    renamed_files = []
+
+    for i, file in enumerate(files, start=1):
+        ext = os.path.splitext(file)[1]
+        new_name = f"{i:03d}{ext}"  # "001.jpg", "002.jpg", etc.
+        old_path = os.path.join(folder, file)
+        new_path = os.path.join(folder, new_name)
+
+        os.rename(old_path, new_path)
+        renamed_files.append(new_path)
+
+    print("Fichiers renommés avec des zéros pour un tri correct !")
+    return renamed_files  # Retourne la liste des nouveaux fichiers
+
+def images_to_cbr(image_paths, cbr_path):
+    """Crée un fichier CBR (Comic Book RAR) sous Ubuntu en utilisant rar ou 7z."""
+    
+    # Vérifier si 'rar' ou '7z' est disponible
+    if shutil.which("rar"):
+        command = ["rar", "a", "-ep", cbr_path] + image_paths
+    elif shutil.which("7z"):
+        command = ["7z", "a", cbr_path] + image_paths  # Utilisation de 7z si rar n'est pas installé
+    else:
+        raise FileNotFoundError("Ni 'rar' ni '7z' ne sont installés. Installez-les avec 'sudo apt install rar' ou 'sudo apt install p7zip-full'.")
+
+    # Exécuter la commande
+    subprocess.run(command, check=True)
+    
+    print(f'Conversion en CBR terminée : {cbr_path}')
+
+def images_to_cbz(image_paths, cbz_path):
+    """Crée un fichier CBZ (Comic Book Zip) sous Ubuntu."""
+    
+    with zipfile.ZipFile(cbz_path, 'w') as cbz:
+        for image_path in image_paths:
+            cbz.write(image_path, os.path.basename(image_path))
+    
+    print(f'Conversion en CBZ terminée : {cbz_path}')

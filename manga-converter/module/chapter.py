@@ -19,14 +19,22 @@ class Chapter:
         self.domain_name = utils.get_domain(link)
         self.pages_link = []
         self.pages_path = []
-        self.converted_chapters_path = None
+        self.converted_pdf_chapters_path = None
         if os.path.exists(f"./export/{self.manga_name}/pdf/chapter_{self.id()}.pdf"):
-            self.converted_chapters_path = f"./export/{self.manga_name}/pdf/chapter_{self.id()}.pdf"
-    
+            self.converted_pdf_chapters_path = f"./export/{self.manga_name}/pdf/chapter_{self.id()}.pdf"
+        
+        self.converted_cbr_chapters_path = None
+        if os.path.exists(f"./export/{self.manga_name}/cbr/chapter_{self.id()}.cbr"):
+            self.converted_cbr_chapters_path = f"./export/{self.manga_name}/cbr/chapter_{self.id()}.cbr"
+        
+        self.converted_cbz_chapters_path = None
+        if os.path.exists(f"./export/{self.manga_name}/cbr/chapter_{self.id()}.cbz"):
+            self.converted_cbz_chapters_path = f"./export/{self.manga_name}/cbz/chapter_{self.id()}.cbz"
+            
     def id(self):
         return int(self.id_chapter) if float(self.id_chapter).is_integer() else float(self.id_chapter)
 
-    def download(self):
+    def download(self,format):
         """
         Cette méthode permet de télécharger les pages d'un chapitre d'un manga.
 
@@ -44,7 +52,7 @@ class Chapter:
             bool: `True` si le téléchargement a réussi (pages et images récupérées et téléchargées correctement),
                 `False` en cas d'échec (par exemple, si les liens des pages ou les images sont manquants ou incorrects).
         """
-        if self.converted_chapters_path == None :
+        if self.converted_pdf_chapters_path == None and format == "PDF" or self.converted_cbr_chapters_path == None and format == "CBR" or self.converted_cbz_chapters_path == None and format == "CBZ":
             # Si la page HTML du chapitre n'a pas encore été récupérée
             if self.chapter_html_page == None :
                 # Récupération de la page HTML du chapitre via un utilitaire (extraction du contenu texte)
@@ -64,14 +72,22 @@ class Chapter:
             if self.pages_path == []:
                 # Appel de la méthode pour télécharger les images du chapitre
                 self.pages_path = self.__download_chapter_images()
+                self.pages_path = utils.rename_images_for_order(f"/tmp/{self.manga_name}/chapter_{self.id()}")
 
             # Si les liens des pages ou les chemins des images sont manquants, on retourne `False` (échec du téléchargement)
             if self.pages_path == None or self.pages_link == None:
                 return False
             
-            if self.__convert_to_pdf() == False:
-                return False
-
+            if format == "PDF":
+                if self.__convert_to_pdf() == False:
+                    return False
+            if format == "CBR":
+                if self.__convert_to_CBR() == False:
+                    return False
+            if format == "CBZ":
+                if self.__convert_to_CBZ() == False:
+                    return False
+            
             # Supprime les fichiers temporaires pour le chapitre
             # Créer un dossier racine pour le manga dans le répertoire temporaire (en utilisant le nom du manga)
             root_dir = tempfile.gettempdir()+f"/{self.manga_name}/chapter_{self.id()}"
@@ -168,13 +184,43 @@ class Chapter:
         os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
         path_for_convertion = root_dir+f"chapter_{self.id()}.pdf"
         
-        if self.converted_chapters_path == None:
+        if self.converted_pdf_chapters_path == None:
             # Convertir les images en PDF
-            self.converted_chapters_path = path_for_convertion
+            self.converted_pdf_chapters_path = path_for_convertion
             return utils.images_to_pdf(self.pages_path,path_for_convertion )
         else :
             print (f"Chapter {self.id()} is already converted")
             return True
-    def convert_pdf_to_ebook(self):
-        """_summary_
+    def __convert_to_CBR(self):
         """
+        Convertit les images du chapitre en un fichier PDF et l'enregistre dans le dossier export.
+        """        
+        # Définir le dossier d'exportation
+        root_dir = os.path.join("./export", self.manga_name+"/cbr/")
+        os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
+        path_for_convertion = root_dir+f"chapter_{self.id()}.cbr"
+        
+        if self.converted_cbr_chapters_path == None:
+            # Convertir les images en PDF
+            self.converted_cbr_chapters_path = path_for_convertion
+            return utils.images_to_cbr(self.pages_path,path_for_convertion)
+        else :
+            print (f"Chapter {self.id()} is already converted")
+            return True
+
+    def __convert_to_CBZ(self):
+        """
+        Convertit les images du chapitre en un fichier PDF et l'enregistre dans le dossier export.
+        """        
+        # Définir le dossier d'exportation
+        root_dir = os.path.join("./export", self.manga_name+"/cbz/")
+        os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
+        path_for_convertion = root_dir+f"chapter_{self.id()}.cbz"
+        
+        if self.converted_cbz_chapters_path == None:
+            # Convertir les images en PDF
+            self.converted_cbz_chapters_path = path_for_convertion
+            return utils.images_to_cbz(self.pages_path,path_for_convertion)
+        else :
+            print (f"Chapter {self.id()} is already converted")
+            return True
