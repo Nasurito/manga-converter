@@ -1,6 +1,8 @@
 import re
-import utils
+import os
+import tempfile
 import subprocess
+import utils
 from module.chapter import Chapter
 
 class Manga:
@@ -17,9 +19,9 @@ class Manga:
         self.domain_name = utils.get_domain(link)
         
         if self.domain_name == "mangakatana":
-            self.manga_name,self.author,self.manga_genres,self.manga_chapters = self.__get_info_from_mangakatana(manga_html_page)
+            self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = self.__get_info_from_mangakatana(manga_html_page)
         elif self.domain_name == "lelmanga":
-            self.manga_name,self.author,self.manga_genres,self.manga_chapters = self.__get_info_from_lelmanga(manga_html_page)
+            self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = self.__get_info_from_lelmanga(manga_html_page)
         else:
             raise Exception("Le site utilisé n'est pas supporté par le programme")
     
@@ -49,7 +51,15 @@ class Manga:
         # Récupére tout les genres
         genres = re.findall('<a[^>]*>(.*?)<\/a>', genres_html)
         
-        
+
+        regex = r'<div class="cover"[^>]*>.*?<img[^>]*\s+src=["\']([^"\']+)["\']'
+        match = re.search(regex, html_page)
+        if match:
+            # Créer un dossier racine pour le manga dans le répertoire temporaire (en utilisant le nom du manga)
+            root_dir = tempfile.gettempdir()+f"/{manga_name}"
+            os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
+            utils.download_image(match.group(1),root_dir+"/thumb.jpg")
+                
         # Nettoyer les espaces et tabulations inutiles dans le HTML
         clean_html = re.sub(r'\s+', ' ', html_page)
         # Extraire la première div avec la classe "chapters" qui est suivis de l'initialisation du tableau
@@ -65,7 +75,7 @@ class Manga:
         for link, data_num  in chapters_link_found:
              chapters_list.append(Chapter(data_num,manga_name,link))
 
-        return manga_name, author,genres, chapters_list
+        return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
     
     def __get_info_from_lelmanga(self,html_page):
         """Cette methode privée récupére les informations d'un manga depuis le site www.lelmanga.com
@@ -98,6 +108,17 @@ class Manga:
         
         # Nettoyer les espaces et tabulations inutiles dans le HTML
         clean_html = re.sub(r'\s+', ' ', html_page)
+        
+        regex = r'<div class="thumb"[^>]*>.*?<img[^>]*\s+src=["\']([^"\']+)["\']'
+        match = re.search(regex, clean_html)
+        if match:
+            # Créer un dossier racine pour le manga dans le répertoire temporaire (en utilisant le nom du manga)
+            root_dir = tempfile.gettempdir()+f"/{manga_name}"
+            os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
+    
+            utils.download_image(match.group(1),root_dir+"/thumb.jpg")
+        
+        
         # Regex pour extraire le contenu de la div "eplister" et récupérer les liens dans les balises <a>
         pattern_div = r'<div class=["\']eplister["\'][^>]*><ul[^>]*>(.*?)<\/ul><\/div>'
         match_div = re.search(pattern_div, clean_html, re.DOTALL)
@@ -112,7 +133,7 @@ class Manga:
         for data_num, link in chapters_link_found:
              chapters_list.append(Chapter(data_num,manga_name,link))
 
-        return manga_name, author,genres, chapters_list
+        return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
     
     def review(self):
         """
@@ -165,58 +186,79 @@ class Manga:
         # Correction si l'utilisateur a inversé les bornes
         start, end = min(chapter_start, chapter_end), max(chapter_start, chapter_end)
 
-        converted_chapter = []
         # Filtrer les chapitres à télécharger et les télécharger directement
         for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
             self.download_chapter(chapter.id(),format)
 
-            converted_chapter.append(chapter.get_convetion_path(format))
-
-        
-        self.convert_to_epub(converted_chapter)
-
-    def convert_to_epub(self, chapter_path):
+    def convert_to_epub(self):
         """
-        Convertit un ou plusieurs chapitres en EPUB.
-
-        Args:
-            chapter_path (list): Liste des chemins des fichiers de chapitres.
+        Convertit plusieurs chapitres en un seul fichier EPUB.
 
         Returns:
-            bool: True si la conversion a réussi pour au moins un chapitre, False sinon.
+            bool: True si la conversion a réussi, False sinon.
         """
-        
-        fichier_sortie = f"./export/{self.manga_name}/{self.manga_name}.epub"
-        
-        # Commande Calibre pour convertir les fichiers CBR en un seul EPUB
-        command = [
-            "ebook-convert"
-        ] + chapter_path + [fichier_sortie]  # On ajoute les fichiers et le fichier de sortie
 
-        # Exécution de la commande
-        result = subprocess.run(command, capture_output=True)
+        epub_files_folder = f"./export/{self.manga_name}/epub"
 
-        # Vérification du succès de la conversion
-        if result.returncode != 0:
-            print(f"Erreur lors de la conversion : {result.stderr.decode()}")
+        if not os.path.exists(epub_files_folder):
+            print(f"Erreur : Le dossier {epub_files_folder} n'existe pas.")
             return False
 
-        # Commande pour ajouter les métadonnées à l'EPUB
+        fichiers_epub = [os.path.join(epub_files_folder, f) for f in os.listdir(epub_files_folder) if f.endswith(".epub")]
+        
+        if not fichiers_epub:
+            raise FileNotFoundError(
+                "Aucun chapitre trouvé en format EPUB. Vous devez d'abord convertir les fichiers CBR/CBZ en EPUB."
+            )
+
+        # Trier les fichiers par numéro de chapitre
+        fichiers_epub = sorted(fichiers_epub, key=lambda x: utils.extraire_numero(x) if utils.extraire_numero(x) is not None else x)
+
+        # Fichier EPUB final
+        fichier_sortie = f"./export/{self.manga_name}/{self.manga_name}.epub"
+
+        # Fusionner les fichiers EPUB avec calibre-debug
         command = [
+            "calibre-debug",
+            "--run-plugin", "EpubMerge",  # Assure-toi que le plugin "EpubMerge" est installé
+            "--",
+            "-o", fichier_sortie  # Ce sera le fichier de sortie, où les chapitres seront combinés
+        ] + fichiers_epub  # Ajouter les fichiers EPUB à fusionner
+
+        print(f"Fusion des fichiers EPUB en : {fichier_sortie}")
+        result = subprocess.run(command, capture_output=True)
+
+        if result.returncode != 0:
+            print(f"Erreur lors de la fusion des fichiers EPUB : {result.stderr.decode()}")
+            return False
+
+        # Vérifier si le fichier de sortie existe
+        if not os.path.exists(fichier_sortie):
+            print("Erreur : Le fichier EPUB final n'a pas été généré.")
+            return False
+
+        # Ajouter les métadonnées
+        command_meta = [
             "ebook-meta", 
             fichier_sortie,
             "--title", self.manga_name,
-            "--author", self.author,
-            #"--cover", image_couverture,
-            "--tags", ' , '.join(map(str, self.manga_genres))
+            "--language", "en" if self.domain_name=="mangakatana" else "fr",
+            "--authors", self.author,
+            "--tags", ', '.join(map(str, self.manga_genres))
         ]
-        
-        # Exécution de la commande
-        result = subprocess.run(command, capture_output=True)
-        
-        # Vérification du succès de l'ajout des métadonnées
+
+        # Vérifier et ajouter la couverture si elle existe
+        cover_path = os.path.join(tempfile.gettempdir(), self.manga_name, "thumb.jpg")
+        if os.path.exists(cover_path):
+            command_meta += ["--cover", cover_path]
+
+        print("Ajout des métadonnées à l'EPUB...")
+        result = subprocess.run(command_meta, capture_output=True)
+
         if result.returncode != 0:
             print(f"Erreur lors de l'ajout des métadonnées : {result.stderr.decode()}")
             return False
 
+        print(f"Conversion réussie : {fichier_sortie}")
         return True
+

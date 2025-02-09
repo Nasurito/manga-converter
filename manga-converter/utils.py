@@ -65,8 +65,6 @@ def remove_temp_folder(folder_path):
     else:
         print(f"Le dossier {folder_path} n'existe pas.")
 
-
-
 def download_image(url, filename):
     """
     Cette fonction est utilisée pour télécharger une image à partir de son url
@@ -134,3 +132,8 @@ def images_to_cbz(image_paths, cbz_path):
             cbz.write(image_path, os.path.basename(image_path))
     
     print(f'Conversion en CBZ terminée : {cbz_path}')
+    
+# Fonction pour extraire le numéro du chapitre
+def extraire_numero(fichier):
+    match = re.search(r"chapter_(\d+)", fichier)
+    return int(match.group(1)) if match else float('inf')
