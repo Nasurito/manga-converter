@@ -7,14 +7,8 @@ lxml==5.3.0
 packaging==24.2
 pikepdf==9.2.1
 pillow==10.4.0
+PySide6==6.2.4
 requests==2.32.3
+shiboken6==6.2.4
 urllib3==2.2.3
 wrapt==1.17.2
-PySide6>=6.5.1
-psutil>=5.9.5
-python-slugify>=1.2.1
-raven>=6.0.0
-mozjpeg-lossless-optimization>=1.1.2
-natsort>=8.4.0
-distro>=1.8.0
-numpy>=1.22.4,<2.0.0

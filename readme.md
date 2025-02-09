@@ -1,5 +1,16 @@
 # Manga-converter
 
+## Dépendance
+
+### Ubuntu
+
+- python3
+- calibre
+- Kcc [(voir marche a suivre)](https://github.com/ciromattia/kcc/wiki/Installation)
+
+### Python
+
+
 
 Utilisé cette commande pour récupéré tout les paquets utilisé dans le projet
 
