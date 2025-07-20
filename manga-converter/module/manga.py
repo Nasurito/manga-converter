@@ -2,6 +2,9 @@ import re
 import os
 import tempfile
 import subprocess
+from PIL import Image
+from ebooklib import epub
+
 import utils
 from module.chapter import Chapter
 
@@ -42,14 +45,14 @@ class Manga:
         genres=[]
         chapters_list=[]
 
-        manga_name = re.search('<h1[^>]*class=["\'][^"\']*heading[^"\']*["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE).group(1)
-        author_search = re.search('<a class=["\']author["\'][^>]*>(.*?)<\/a>',html_page)
+        manga_name = re.search(r'<h1[^>]*class=["\'][^"\']*heading[^"\']*["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE).group(1)
+        author_search = re.search(r'<a class=["\']author["\'][^>]*>(.*?)<\/a>',html_page)
         author = author_search.group(1)
         
-        match_div =  re.search('<div class=["\']genres["\'][^>]*>(.*?)<\/div>', html_page, re.DOTALL)
+        match_div =  re.search(r'<div class=["\']genres["\'][^>]*>(.*?)<\/div>', html_page, re.DOTALL)
         genres_html = match_div.group(1)
         # Récupére tout les genres
-        genres = re.findall('<a[^>]*>(.*?)<\/a>', genres_html)
+        genres = re.findall(r'<a[^>]*>(.*?)<\/a>', genres_html)
         
 
         regex = r'<div class="cover"[^>]*>.*?<img[^>]*\s+src=["\']([^"\']+)["\']'
@@ -93,9 +96,9 @@ class Manga:
         chapters_list=[]
         
         # Utiliser re.search pour récupérer uniquement le premier (ou seul) auteur
-        author = re.search('<div class=["\']imptdt["\'][^>]*>\s*Auteur\s*<i>(.*?)<\/i>', html_page).group(1)
+        author = re.search(r'<div class=["\']imptdt["\'][^>]*>\s*Auteur\s*<i>(.*?)<\/i>', html_page).group(1)
         # Utiliser re.search pour récupéré le nom du manga
-        manga_name = re.search('<h1[^>]*class=["\']entry-title["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE).group(1)
+        manga_name = re.search(r'<h1[^>]*class=["\']entry-title["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE).group(1)
 
         # Regex pour extraire le contenu de la div avec la classe "wd-full"
         pattern_div = r'<div class=["\']wd-full["\'][^>]*>\s*<span class=["\']mgen["\'][^>]*>(.*?)<\/span><\/div>'
@@ -172,7 +175,8 @@ class Manga:
 
 
     def download_chapters(self, chapter_start, chapter_end,format="CBZ"):
-        """Télécharge une plage de chapitres.
+        """
+        Télécharge une plage de chapitres.
 
         Args:
             chapter_start (float): Numéro du premier chapitre à télécharger (inclus).
@@ -190,75 +194,113 @@ class Manga:
         for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
             self.download_chapter(chapter.id(),format)
 
-    def convert_to_epub(self):
-        """
-        Convertit plusieurs chapitres en un seul fichier EPUB.
 
-        Returns:
-            bool: True si la conversion a réussi, False sinon.
-        """
+    def download_chapter_to_epub(self, start_chapter, end_chapter):
+        book = epub.EpubBook()
 
-        epub_files_folder = f"./export/{self.manga_name}/epub"
+        book.set_identifier(self.manga_name)
+        book.set_title(self.manga_name)
+        book.set_language("fr" if self.domain_name == "lelmanga" else "en")
+        book.add_author(self.author)
 
-        if not os.path.exists(epub_files_folder):
-            print(f"Erreur : Le dossier {epub_files_folder} n'existe pas.")
-            return False
-
-        fichiers_epub = [os.path.join(epub_files_folder, f) for f in os.listdir(epub_files_folder) if f.endswith(".epub")]
-        
-        if not fichiers_epub:
-            raise FileNotFoundError(
-                "Aucun chapitre trouvé en format EPUB. Vous devez d'abord convertir les fichiers CBR/CBZ en EPUB."
-            )
-
-        # Trier les fichiers par numéro de chapitre
-        fichiers_epub = sorted(fichiers_epub, key=lambda x: utils.extraire_numero(x) if utils.extraire_numero(x) is not None else x)
-
-        # Fichier EPUB final
-        fichier_sortie = f"./export/{self.manga_name}/{self.manga_name}.epub"
-
-        # Fusionner les fichiers EPUB avec calibre-debug
-        command = [
-            "calibre-debug",
-            "--run-plugin", "EpubMerge",  # Assure-toi que le plugin "EpubMerge" est installé
-            "--",
-            "-o", fichier_sortie  # Ce sera le fichier de sortie, où les chapitres seront combinés
-        ] + fichiers_epub  # Ajouter les fichiers EPUB à fusionner
-
-        print(f"Fusion des fichiers EPUB en : {fichier_sortie}")
-        result = subprocess.run(command, capture_output=True)
-
-        if result.returncode != 0:
-            print(f"Erreur lors de la fusion des fichiers EPUB : {result.stderr.decode()}")
-            return False
-
-        # Vérifier si le fichier de sortie existe
-        if not os.path.exists(fichier_sortie):
-            print("Erreur : Le fichier EPUB final n'a pas été généré.")
-            return False
-
-        # Ajouter les métadonnées
-        command_meta = [
-            "ebook-meta", 
-            fichier_sortie,
-            "--title", self.manga_name,
-            "--language", "en" if self.domain_name=="mangakatana" else "fr",
-            "--authors", self.author,
-            "--tags", ', '.join(map(str, self.manga_genres))
-        ]
-
-        # Vérifier et ajouter la couverture si elle existe
         cover_path = os.path.join(tempfile.gettempdir(), self.manga_name, "thumb.jpg")
         if os.path.exists(cover_path):
-            command_meta += ["--cover", cover_path]
+            with open(cover_path, "rb") as f:
+                book.set_cover("cover.jpg", f.read())
 
-        print("Ajout des métadonnées à l'EPUB...")
-        result = subprocess.run(command_meta, capture_output=True)
+        spine = ['nav']
+        toc = []
 
-        if result.returncode != 0:
-            print(f"Erreur lors de l'ajout des métadonnées : {result.stderr.decode()}")
-            return False
+        chapters_to_process = [ch for ch in self.manga_chapters if start_chapter <= ch.id() <= end_chapter]
+        chapters_to_process = sorted(chapters_to_process, key=lambda c: c.id())
 
-        print(f"Conversion réussie : {fichier_sortie}")
+        for chapter in chapters_to_process:
+            print(f"📥 Traitement du chapitre {chapter.id()}...")
+
+            if not chapter.pages_path:
+                if not chapter.fetch_images():
+                    print(f"❌ Échec téléchargement chapitre {chapter.id()}")
+                    continue
+
+            first_page_file = None
+
+            for i, img_path in enumerate(chapter.pages_path, 1):
+                img_name = os.path.basename(img_path)
+
+                with Image.open(img_path) as img:
+                    if img.width > img.height:
+                        img = img.rotate(90, expand=True)
+                    if img.mode not in ['RGB', 'L']:
+                        img = img.convert('RGB')
+                    img.save(img_path)
+
+                with open(img_path, "rb") as img_file:
+                    img_item = epub.EpubItem(
+                        uid=f"img_{chapter.id()}_{i}",
+                        file_name=f"images/chapter_{chapter.id()}/{img_name}",
+                        media_type="image/jpeg",
+                        content=img_file.read()
+                    )
+                    book.add_item(img_item)
+
+                page = epub.EpubHtml(
+                    uid=f"chap_{chapter.id()}_page_{i}",
+                    title=None,
+                    file_name=f"chapter_{chapter.id()}_page_{i}.xhtml",
+                    lang="fr"
+                )
+
+                page.set_content(f"""<!DOCTYPE html>
+    <html lang="fr" dir="rtl">
+    <head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0"/>
+    <style>
+        html, body {{
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: black;
+        }}
+        body {{
+            direction: rtl;            /* <<< sens de lecture manga */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }}
+        img {{
+            max-width: 100%;
+            max-height: 100vh;
+            height: auto;
+            width: auto;
+            display: block;
+        }}
+    </style>
+    </head>
+    <body>
+    <img src="images/chapter_{chapter.id()}/{img_name}" alt="Page"/>
+    </body>
+    </html>""")
+
+                book.add_item(page)
+                spine.append(page)
+                if i == 1:
+                    first_page_file = page
+
+            if first_page_file:
+                first_page_file.title = " "
+                toc.append(epub.Link(first_page_file.file_name, f"Chapitre {chapter.id()}", first_page_file.id))
+
+        book.toc = tuple(toc)
+        book.spine = spine
+        book.spine_direction = 'rtl'
+
+        book.add_item(epub.EpubNcx())
+        book.add_item(epub.EpubNav())
+
+        output_path = f"./export/{self.manga_name}/{self.manga_name}_full.epub"
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        epub.write_epub(output_path, book)
+        print(f"✅ EPUB créé : {output_path}")
         return True
-
