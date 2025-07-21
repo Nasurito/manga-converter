@@ -24,7 +24,11 @@ class Manga:
         if self.domain_name == "mangakatana":
             self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = self.__get_info_from_mangakatana(manga_html_page)
         elif self.domain_name == "lelmanga":
-            self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = self.__get_info_from_lelmanga(manga_html_page)
+            manga=self.__get_info_from_lelmanga(manga_html_page)
+            if manga!=None:
+                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = manga
+            else:
+                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover=None,None,None,None,None
         else:
             raise Exception("Le site utilisé n'est pas supporté par le programme")
     
@@ -47,7 +51,7 @@ class Manga:
 
         manga_name = re.search(r'<h1[^>]*class=["\'][^"\']*heading[^"\']*["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE).group(1)
         author_search = re.search(r'<a class=["\']author["\'][^>]*>(.*?)<\/a>',html_page)
-        author = author_search.group(1)
+        author = "autheur inconnu " if author_search == None else author_search.group(1)
         
         match_div =  re.search(r'<div class=["\']genres["\'][^>]*>(.*?)<\/div>', html_page, re.DOTALL)
         genres_html = match_div.group(1)
@@ -102,8 +106,11 @@ class Manga:
             author = "Autheur inconnu"
 
         # Utiliser re.search pour récupéré le nom du manga
-        manga_name = re.search(r'<h1[^>]*class=["\']entry-title["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE).group(1)
-
+        match = re.search(r'<h1[^>]*class=["\']entry-title["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE)
+        if match:
+            manga_name = match.group(1)
+        else:
+            return None 
         # Regex pour extraire le contenu de la div avec la classe "wd-full"
         pattern_div = r'<div class=["\']wd-full["\'][^>]*>\s*<span class=["\']mgen["\'][^>]*>(.*?)<\/span><\/div>'
         match_div = re.search(pattern_div, html_page,re.DOTALL)
