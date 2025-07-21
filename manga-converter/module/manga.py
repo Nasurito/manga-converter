@@ -95,8 +95,12 @@ class Manga:
         genres=[]
         chapters_list=[]
         
-        # Utiliser re.search pour récupérer uniquement le premier (ou seul) auteur
-        author = re.search(r'<div class=["\']imptdt["\'][^>]*>\s*Auteur\s*<i>(.*?)<\/i>', html_page).group(1)
+        try:
+            # Utiliser re.search pour récupérer uniquement le premier (ou seul) auteur
+            author = re.search(r'<div class=["\']imptdt["\'][^>]*>\s*Auteur\s*<i>(.*?)<\/i>', html_page).group(1)
+        except:
+            author = "Autheur inconnu"
+
         # Utiliser re.search pour récupéré le nom du manga
         manga_name = re.search(r'<h1[^>]*class=["\']entry-title["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE).group(1)
 
