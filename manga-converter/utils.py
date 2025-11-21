@@ -5,6 +5,7 @@ import img2pdf
 import zipfile
 import requests
 import subprocess
+import undetected_chromedriver as uc
 
 def get_domain(url):
     """Cette fonction récupére le domaine d'un site web et le retourne, si il n'y a pas de valeur de retour, il retourne None
@@ -21,7 +22,7 @@ def get_domain(url):
         return match.group(1)
     return None
 
-def get_page(url_request):
+def get_page(domain_name,url_request):
     """
     Cette fonction permet de récupéré le contenue d'une page web sous format HTML
 
@@ -31,22 +32,59 @@ def get_page(url_request):
     Returns:
         string: Le contenu de la page sous format HTML ou None si une érreur s'est produite
     """
-    try:
-        response = requests.get(url_request, timeout=20)  # Ajout d'un timeout
-        response.raise_for_status()
-        response.encoding = 'utf-8'   
-    except requests.exceptions.HTTPError as error:
-        print("An HTTP error occurred:", error)
-        response = None 
-    except requests.exceptions.ReadTimeout:
-        print("Request timed out")
-        response = None
-    except requests.exceptions.ConnectionError:
-        print("Connection error")
-        response = None
-    except requests.exceptions.RequestException as error:
-        print("An unexpected error occurred:", error)
-        response = None
+
+    response = None
+
+    if domain_name == "sushiscan":
+        # Options pour rendre la navigation plus humaine
+        options = uc.ChromeOptions()
+        # options.add_argument('--headless') # Ne pas utiliser le mode headless (sans fenêtre) pour les CAPTCHAs !
+        # Initialisation du driver "indétecté"
+        driver = uc.Chrome(options=options)
+
+        try:
+            print("Chargement de la page...")
+            driver.get(url_request)
+            # Pause pour vous laisser le temps de gérer le CAPTCHA manuellement
+            # Le chargement ne devrait plus être infini ici
+            print("ATTENTION : Résolvez le CAPTCHA dans la fenêtre ouverte.")
+            input("Appuyez sur Entrée ici une fois le contenu chargé...")
+
+            # Récupération des données
+            response = driver.page_source
+            print("Contenu récupéré !")
+        except Exception as e:
+            print(f"Une erreur est survenue : {e}")
+
+        finally:
+            driver.quit()
+    else: 
+        s = requests.Session()
+        s.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        })
+        
+        if domain_name == "lelmanga":
+            s.headers.update({"Referer": "https://www.lelmanga.com/"})
+        elif domain_name == "lelmanga":
+            s.headers.update({"Referer": "https://mangakatana.com"})
+
+        
+        try:
+            response = s.get(url_request, timeout=20)  # Ajout d'un timeout
+            response.raise_for_status()
+            response.encoding = 'utf-8'   
+        except requests.exceptions.HTTPError as error:
+            print("An HTTP error occurred:", error)
+        except requests.exceptions.ReadTimeout:
+            print("Request timed out")
+        except requests.exceptions.ConnectionError:
+            print("Connection error")
+        except requests.exceptions.RequestException as error:
+            print("An unexpected error occurred:", error)
+    
     return response # Retourner le resultat de la requete
 
 def remove_temp_folder(folder_path):
