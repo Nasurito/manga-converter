@@ -155,6 +155,7 @@ class Chapter:
     def __download_chapter_images(self, driver=None):
         """
         Cette méthode télécharge toutes les images d'un chapitre et les stocke dans un dossier temporaire.
+        Elle vérifie d'abord si les images existent en cache et demande à l'utilisateur s'il veut les réutiliser.
         
         Elle crée un répertoire temporaire pour le manga, puis un sous-dossier pour le chapitre spécifié.
         Ensuite, elle télécharge les images des pages et les enregistre localement.
@@ -162,13 +163,28 @@ class Chapter:
         Retour:
             list: Une liste contenant les chemins des fichiers téléchargés pour chaque image du chapitre.
         """
-        # Créer un dossier racine pour le manga dans le répertoire temporaire (en utilisant le nom du manga)
+        # Définir les chemins pour le cache
         root_dir = os.path.join(tempfile.gettempdir(), self.manga_name)
-        os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
-        
-        # Créer un sous-dossier pour le chapitre en utilisant son ID
         chapter_dir = os.path.join(root_dir, f"chapter_{self.id()}")
-        os.makedirs(chapter_dir, exist_ok=True)  # Créer le dossier du chapitre
+        os.makedirs(chapter_dir, exist_ok=True)
+
+        # Vérifier le cache
+        if os.path.exists(chapter_dir) and len(os.listdir(chapter_dir)) > 0:
+            cached_files = sorted([os.path.join(chapter_dir, f) for f in os.listdir(chapter_dir)])
+            
+            if len(cached_files) == len(self.pages_link):
+                print(f"ℹ️  Le chapitre {self.id()} a été trouvé dans le cache avec {len(cached_files)} images.")
+                user_choice = input("Voulez-vous réutiliser le cache ? (O/n) : ").strip().lower()
+                
+                if user_choice != 'n':
+                    print("✅ Utilisation des images du cache.")
+                    return cached_files
+                else:
+                    print("🗑️ Suppression des anciennes images du cache...")
+                    for file_path in cached_files:
+                        os.remove(file_path)
+
+        os.makedirs(chapter_dir, exist_ok=True)
         
         downloaded_images = []  # Liste pour stocker les chemins locaux des images téléchargées
 
