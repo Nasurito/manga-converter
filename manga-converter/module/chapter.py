@@ -6,7 +6,7 @@ import utils
 
 class Chapter:
     """Cette classe est utilisé pour définir un chapitre dans un manga, un chapitre posséde plusieurs pages (image récupérée depuis le site)"""
-    def __init__(self,id,manga_name,link):
+    def __init__(self,id:int,manga_name:str,link:str)->None:
         """
         Cette fonction est appalée à chaque création d'un chapitre, elle permet de récupéré les informations en fonctions du lien et des sites supporté
 
@@ -35,7 +35,7 @@ class Chapter:
     def id(self):
         return int(self.id_chapter) if float(self.id_chapter).is_integer() else float(self.id_chapter)
 
-    def get_convetion_path(self,format):
+    def get_convetion_path(self,format:str)->str:
         if format == 'CBZ':
             return self.converted_cbz_chapters_path
         elif format == 'CBR':
@@ -43,7 +43,7 @@ class Chapter:
         else:
             return self.converted_pdf_chapters_path
 
-    def fetch_images(self):
+    def fetch_images(self)->bool:
         if self.pages_path:  # Déjà fait
             return True
 
@@ -63,7 +63,7 @@ class Chapter:
                 return False
         return False
 
-    def _try_fetch_images(self):
+    def _try_fetch_images(self)->bool:
         driver = None
         try:
             # Récupérer et nettoyer la page HTML
@@ -105,7 +105,7 @@ class Chapter:
         return True
 
 
-    def download(self, format):
+    def download(self, format:str)->bool:
         if not self.fetch_images():
             return False
 
@@ -118,7 +118,7 @@ class Chapter:
         
         return True  # Aucun format = téléchargement seul
 
-    def __get_pages_link_from_mangakatana(self):
+    def __get_pages_link_from_mangakatana(self)->list[str]:
         """
         Cette méthode récupère les liens de toutes les pages d'un chapitre du site mangakatana.com.
         Elle extrait les liens des pages à partir du code JavaScript de la page HTML.
@@ -138,7 +138,7 @@ class Chapter:
         if match is not None:
             return json.loads(match.group(1))  # Evaluer la chaîne de caractères en un tableau Python
     
-    def __get_pages_link_from_lelmanga(self):
+    def __get_pages_link_from_lelmanga(self)->list[str]:
         """
         Cette méthode récupère les liens de toutes les pages d'un chapitre du site lelmanga.com.
         Elle extrait les liens des pages en utilisant une expression régulière qui recherche les attributs `src` des images.
@@ -156,7 +156,7 @@ class Chapter:
         if matches is not None:
             return matches
         
-    def __get_pages_link_from_sushiscan(self):
+    def __get_pages_link_from_sushiscan(self)->list[str]:
         """
         Cette méthode récupère les liens de toutes les pages d'un chapitre du site sushiscan.com.
         Elle extrait les liens des pages en utilisant une expression régulière qui recherche les attributs `data-src` des images.
@@ -175,7 +175,7 @@ class Chapter:
             return matches
 
     
-    def __download_chapter_images(self, driver=None):
+    def __download_chapter_images(self, driver=None)->list[str]:
         """
         Cette méthode télécharge toutes les images d'un chapitre et les stocke dans un dossier temporaire.
         Elle vérifie d'abord si les images existent en cache et demande à l'utilisateur s'il veut les réutiliser.

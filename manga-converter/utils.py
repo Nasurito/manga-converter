@@ -8,7 +8,7 @@ import requests
 import subprocess
 import undetected_chromedriver as uc
 
-def get_domain(url):
+def get_domain(url:str)->str:
     """Cette fonction récupére le domaine d'un site web et le retourne, si il n'y a pas de valeur de retour, il retourne None
 
     Args:
@@ -23,7 +23,7 @@ def get_domain(url):
         return match.group(1)
     return None
 
-def get_page(url_request):
+def get_page(url_request:str)->tuple[str,uc.Chrome]|None:
     """
     Cette fonction permet de récupéré le contenue d'une page web sous format HTML
 
@@ -89,7 +89,7 @@ def get_page(url_request):
 
     return return_value,driver # Retourner le resultat de la requete
 
-def remove_temp_folder(folder_path):
+def remove_temp_folder(folder_path :str)->None:
     if os.path.exists(folder_path):
         # Supprimer tous les fichiers dans le dossier
         for filename in os.listdir(folder_path):
@@ -105,7 +105,7 @@ def remove_temp_folder(folder_path):
     else:
         print(f"Le dossier {folder_path} n'existe pas.")
 
-def download_image(url, filename):
+def download_image(url:str, filename:str)->bool:
     """
     Cette fonction est utilisée pour télécharger une image à partir de son url
     Args:
@@ -125,7 +125,7 @@ def download_image(url, filename):
         print("Erreur lors du téléchargement :", error)
         return False
 
-def download_image_with_driver_single(driver, url, filename):
+def download_image_with_driver_single(driver:uc.Chrome, url:str, filename:str)->bool:
     """
     Downloads an image using the session from the provided selenium driver.
     This method is faster as it uses requests with the driver's cookies.
@@ -170,7 +170,7 @@ def download_image_with_driver_single(driver, url, filename):
         print(f"Une erreur inattendue est survenue lors du téléchargement avec la session : {e}")
         return False
 
-def images_to_pdf(img_list, output_pdf):
+def images_to_pdf(img_list:list[str], output_pdf:str)->bool:
     """
     Convertit une liste d'images en un fichier PDF.
 
@@ -193,7 +193,7 @@ def images_to_pdf(img_list, output_pdf):
         print(f"❌ Erreur lors de la création du PDF : {e}")
         return False
 
-def images_to_cbr(image_paths, cbr_path):
+def images_to_cbr(image_paths:list[str], cbr_path:str)->None:
     """Crée un fichier CBR (Comic Book RAR) sous Ubuntu en utilisant rar ou 7z."""
     
     # Vérifier si 'rar' ou '7z' est disponible
@@ -209,7 +209,7 @@ def images_to_cbr(image_paths, cbr_path):
     
     print(f'Conversion en CBR terminée : {cbr_path}')
 
-def images_to_cbz(image_paths, cbz_path):
+def images_to_cbz(image_paths:list[str], cbz_path:str)->None:
     """Crée un fichier CBZ (Comic Book Zip) sous Ubuntu."""
     
     with zipfile.ZipFile(cbz_path, 'w') as cbz:

@@ -10,7 +10,7 @@ from module.chapter import Chapter
 
 class Manga:
     """Cette classe est utilisé pour définir un manga, un manga possede plusieurs chapitres (objet de la classe chapitre)"""
-    def __init__(self,link):
+    def __init__(self,link:str)->None:
         """Cette methode est appalée à chaque création d'un manga, elle permet de récupéré les informations en fonction du lien et des sites supporté
 
         Args:
@@ -41,7 +41,7 @@ class Manga:
         else:
             raise Exception("Le site utilisé n'est pas supporté par le programme")
     
-    def __get_info_from_mangakatana(self,html_page):
+    def __get_info_from_mangakatana(self,html_page:str)->tuple[str,str,list,str,list]:
         """Cette methode privée récupére les informations relative a un manga si le lien fournis viens du site mangakatana
 
         Args:
@@ -93,7 +93,7 @@ class Manga:
 
         return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
     
-    def __get_info_from_lelmanga(self,html_page):
+    def __get_info_from_lelmanga(self,html_page:str)->tuple[str,str,list,str,list]:
         """Cette methode privée récupére les informations d'un manga depuis le site www.lelmanga.com
         Args:
             html_page (html): correspond a la page html récupéré avec le lien fournis a la création du manga
@@ -158,7 +158,7 @@ class Manga:
 
         return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
     
-    def __get_info_from_sushiscan(self,html_page):
+    def __get_info_from_sushiscan(self,html_page:str)->tuple[str,str,list,str,list]:
         """Cette methode privée récupére les informations d'un manga depuis le site www.lelmanga.com
         Args:
             html_page (html): correspond a la page html récupéré avec le lien fournis a la création du manga
@@ -235,7 +235,7 @@ class Manga:
         print("Nombre de chapitre :",higher_id)
         print("\n")
     
-    def download_chapter(self, chapter_number,format="CBZ"):
+    def download_chapter(self, chapter_number:int,format:str="CBZ")->bool:
         """Télécharge un chapitre spécifique dans le bon format
 
         Args:
@@ -251,7 +251,7 @@ class Manga:
         print(f"Erreur de téléchargement du chapitre {chapter_to_download.id()}")
         return False
 
-    def download_chapters(self, chapter_start, chapter_end,format="CBZ"):
+    def download_chapters(self, chapter_start:int, chapter_end:int,format:str="CBZ")->None:
         """
         Télécharge une plage de chapitres.
 
@@ -271,7 +271,7 @@ class Manga:
         for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
             self.download_chapter(chapter.id(),format)
 
-    def download_chapter_to_epub(self, start_chapter, end_chapter=None):
+    def download_chapter_to_epub(self, start_chapter:int, end_chapter:int, output_path:str=None)->bool:
 
         """
         Cette fonction permet de télécharger un ou plusieurs chapitres d'un manga et de les convertir en un seul fichier epub
