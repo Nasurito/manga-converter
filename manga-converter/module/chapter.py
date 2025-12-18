@@ -1,3 +1,4 @@
+import json
 import re
 import os
 import tempfile
@@ -94,8 +95,6 @@ class Chapter:
         
         return True  # Aucun format = téléchargement seul
 
-
-
     def __get_pages_link_from_mangakatana(self):
         """
         Cette méthode récupère les liens de toutes les pages d'un chapitre du site mangakatana.com.
@@ -114,7 +113,7 @@ class Chapter:
         
         # Si une correspondance est trouvée, on renvoie le contenu du tableau de liens
         if match is not None:
-            return eval(match.group(1))  # Evaluer la chaîne de caractères en un tableau Python
+            return json.loads(match.group(1))  # Evaluer la chaîne de caractères en un tableau Python
     
     def __get_pages_link_from_lelmanga(self):
         """
