@@ -251,7 +251,6 @@ class Manga:
         print(f"Erreur de téléchargement du chapitre {chapter_to_download.id()}")
         return False
 
-
     def download_chapters(self, chapter_start, chapter_end,format="CBZ"):
         """
         Télécharge une plage de chapitres.
@@ -271,7 +270,6 @@ class Manga:
         # Filtrer les chapitres à télécharger et les télécharger directement
         for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
             self.download_chapter(chapter.id(),format)
-
 
     def download_chapter_to_epub(self, start_chapter, end_chapter=None):
 

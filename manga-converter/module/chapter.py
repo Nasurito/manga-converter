@@ -47,12 +47,30 @@ class Chapter:
         if self.pages_path:  # Déjà fait
             return True
 
+        max_retries = 2
+        for attempt in range(1, max_retries + 1):
+            success = self._try_fetch_images()
+            if success:
+                return True
+            elif attempt < max_retries:
+                print(f"⚠️ Problème lors du téléchargement du chapitre {self.id()}, tentative {attempt}/{max_retries}. Nouvel essai...")
+                # Reset state for a clean retry
+                self.chapter_html_page = None
+                self.pages_link = []
+                self.pages_path = []
+            else:
+                print(f"❌ Échec du téléchargement du chapitre {self.id()} après {max_retries} tentatives.")
+                return False
+        return False
+
+    def _try_fetch_images(self):
         driver = None
         try:
             # Récupérer et nettoyer la page HTML
             if not self.chapter_html_page:
                 html, driver = utils.get_page(self.chapter_html_link)
                 if not html:
+                    print(f"❌ Impossible de récupérer la page HTML pour le chapitre {self.id()}.")
                     return False
                 self.chapter_html_page = re.sub(r'\s+', ' ', html)
 
@@ -68,12 +86,17 @@ class Chapter:
             if not self.pages_link:
                 print(f"❌ Pas de pages trouvées pour chapitre {self.id()}")
                 return False
+            
+            # Vérification spéciale : si une seule image est trouvée, c'est probablement une erreur
+            if len(self.pages_link) == 1:
+                print(f"⚠️ Une seule image a été trouvée pour le chapitre {self.id()}, ce qui signale une erreur probable. Tentative de rafraîchissement.")
+                return False
 
             # Télécharger les images
             self.pages_path = self.__download_chapter_images(driver)
 
             if not self.pages_path or len(self.pages_path) != len(self.pages_link):
-                print(f"❌ Problème avec le téléchargement des images du chapitre {self.id()}")
+                print(f"❌ Problème avec le téléchargement des images du chapitre {self.id()} (téléchargées: {len(self.pages_path)}, attendues: {len(self.pages_link)})")
                 return False
         finally:
             if driver:
