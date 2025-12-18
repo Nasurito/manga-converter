@@ -19,7 +19,6 @@ class Manga:
         
         self.domain_name = utils.get_domain(link)
         manga_html_page,self.driver = utils.get_page(link)
-
         
         if self.domain_name == "mangakatana":
             manga= self.__get_info_from_mangakatana(manga_html_page)
@@ -159,7 +158,6 @@ class Manga:
 
         return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
     
-
     def __get_info_from_sushiscan(self,html_page):
         """Cette methode privée récupére les informations d'un manga depuis le site www.lelmanga.com
         Args:
@@ -275,7 +273,19 @@ class Manga:
             self.download_chapter(chapter.id(),format)
 
 
-    def download_chapter_to_epub(self, start_chapter, end_chapter):
+    def download_chapter_to_epub(self, start_chapter, end_chapter=None):
+
+        """
+        Cette fonction permet de télécharger un ou plusieurs chapitres d'un manga et de les convertir en un seul fichier epub
+
+        Args:
+            start_chapter (float): Numéro du premier chapitre à télécharger (inclus).
+            end_chapter (float, optional): Numéro du dernier chapitre à télécharger (inclus). Si non spécifié, seul le chapitre de start_chapter sera téléchargé. Defaults to None.
+        """
+        if end_chapter is None:
+            end_chapter = start_chapter
+
+
         book = epub.EpubBook()
 
         book.set_identifier(self.manga_name)
@@ -378,7 +388,7 @@ class Manga:
         book.add_item(epub.EpubNcx())
         book.add_item(epub.EpubNav())
 
-        output_path = f"./export/{self.manga_name}/{self.manga_name}_full.epub"
+        output_path = f"./export/{self.manga_name}/{self.manga_name}_{start_chapter}-{end_chapter}.epub"
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         epub.write_epub(output_path, book)
