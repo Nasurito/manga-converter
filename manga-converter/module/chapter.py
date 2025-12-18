@@ -43,80 +43,40 @@ class Chapter:
             return self.converted_pdf_chapters_path
 
     def fetch_images(self):
-        """
-        Cette méthode permet de télécharger les pages d'un chapitre d'un manga.
-
-        Elle récupère d'abord la page HTML du chapitre, extrait les liens des pages d'images,
-        puis télécharge ces images dans un dossier temporaire.
-
-        Le processus est effectué en plusieurs étapes conditionnelles :
-        - Récupération de la page HTML du chapitre si elle n'a pas encore été récupérée.
-        - Extraction des liens des pages d'images en fonction du site d'origine.
-        - Téléchargement des images si elles n'ont pas encore été téléchargées.
-
-        Si toutes les étapes sont réussies, la méthode retourne `True`. Sinon, elle retourne `False`.
-
-        Retour:
-            bool: `True` si le téléchargement a réussi (pages et images récupérées et téléchargées correctement),
-                `False` en cas d'échec (par exemple, si les liens des pages ou les images sont manquants ou incorrects).
-        """
-
-        # retourne directement True si le chemin d'acces est déja existant
-        if self.pages_path:
-            return True
-
-        if self.chapter_html_page is None:
-            # Récupération de la page HTML du chapitre via un utilitaire (extraction du contenu texte)
-            self.chapter_html_page = utils.get_page(self.chapter_html_link).text
-            # Suppression des espaces inutiles dans le HTML pour nettoyer le contenu
-            self.chapter_html_page = re.sub(r'\s+', ' ', self.chapter_html_page)
-
-        # Si la liste des liens des pages est vide (c'est-à-dire qu'elles n'ont pas encore été extraites)
-        if not self.pages_link:
-            # Selon le domaine (site d'origine), on utilise la méthode appropriée pour extraire les liens des pages d'images
-            if self.domain_name == "mangakatana":
-                self.pages_link = self.__get_pages_link_from_mangakatana()
-            elif self.domain_name == "lelmanga":
-                self.pages_link = self.__get_pages_link_from_lelmanga()
-        
-        # Si les chemins des images n'ont pas encore été trouvée
-        if not self.pages_link:
-            return False
-
-        #Appel de la fonction qui télécharges toutes les images d'un chapitre
-        self.pages_path = self.__download_chapter_images()
-
-        # Suppression du dossier temporaire déplacée ailleurs si nécessaire
-        return self.pages_path is not None and len(self.pages_path) == len(self.pages_link)
-    
-    def fetch_images(self):
         if self.pages_path:  # Déjà fait
             return True
 
-        # Récupérer et nettoyer la page HTML
-        if not self.chapter_html_page:
-            html = utils.get_page(self.chapter_html_link)
-            if not html:
+        driver = None
+        try:
+            # Récupérer et nettoyer la page HTML
+            if not self.chapter_html_page:
+                html, driver = utils.get_page(self.chapter_html_link)
+                if not html:
+                    return False
+                self.chapter_html_page = re.sub(r'\s+', ' ', html)
+
+            # Extraire les liens si pas déjà fait
+            if not self.pages_link:
+                if self.domain_name == "mangakatana":
+                    self.pages_link = self.__get_pages_link_from_mangakatana()
+                elif self.domain_name == "lelmanga":
+                    self.pages_link = self.__get_pages_link_from_lelmanga()
+                elif self.domain_name == "sushiscan":
+                    self.pages_link = self.__get_pages_link_from_sushiscan()
+
+            if not self.pages_link:
+                print(f"❌ Pas de pages trouvées pour chapitre {self.id()}")
                 return False
-            self.chapter_html_page = re.sub(r'\s+', ' ', html.text)
 
-        # Extraire les liens si pas déjà fait
-        if not self.pages_link:
-            if self.domain_name == "mangakatana":
-                self.pages_link = self.__get_pages_link_from_mangakatana()
-            elif self.domain_name == "lelmanga":
-                self.pages_link = self.__get_pages_link_from_lelmanga()
+            # Télécharger les images
+            self.pages_path = self.__download_chapter_images(driver)
 
-        if not self.pages_link:
-            print(f"❌ Pas de pages trouvées pour chapitre {self.id()}")
-            return False
-
-        # Télécharger les images
-        self.pages_path = self.__download_chapter_images()
-
-        if not self.pages_path or len(self.pages_path) != len(self.pages_link):
-            print(f"❌ Problème avec le téléchargement des images du chapitre {self.id()}")
-            return False
+            if not self.pages_path or len(self.pages_path) != len(self.pages_link):
+                print(f"❌ Problème avec le téléchargement des images du chapitre {self.id()}")
+                return False
+        finally:
+            if driver:
+                driver.quit()
 
         return True
 
@@ -173,8 +133,27 @@ class Chapter:
         # Si des correspondances sont trouvées, renvoyer la liste des liens des pages
         if matches is not None:
             return matches
+        
+    def __get_pages_link_from_sushiscan(self):
+        """
+        Cette méthode récupère les liens de toutes les pages d'un chapitre du site sushiscan.com.
+        Elle extrait les liens des pages en utilisant une expression régulière qui recherche les attributs `data-src` des images.
+
+        Retour:
+            list: Un tableau de chaînes de caractères contenant les liens des pages du chapitre dans l'ordre.
+        """
+        # Définir le modèle d'expression régulière pour extraire les liens des images depuis les balises <img>
+        regex = r'<img[^>]+data-index=["\'](\d+)["\'][^>]+data-src=["\']([^"\']+)["\']'
+        
+        # Trouver toutes les correspondances dans la page HTML pour extraire les liens des images
+        matches = re.findall(regex, self.chapter_html_page)
+        
+        # Si des correspondances sont trouvées, renvoyer la liste des liens des pages
+        if matches is not None:
+            return matches
+
     
-    def __download_chapter_images(self):
+    def __download_chapter_images(self, driver=None):
         """
         Cette méthode télécharge toutes les images d'un chapitre et les stocke dans un dossier temporaire.
         
@@ -195,14 +174,21 @@ class Chapter:
         downloaded_images = []  # Liste pour stocker les chemins locaux des images téléchargées
 
         # Télécharger chaque image du chapitre et enregistrer dans le dossier du chapitre
-        for index, url in enumerate(self.pages_link,1):
-            # Définir le chemin où l'image sera enregistrée (nom du fichier basé sur l'index)
+        for index, url in enumerate(self.pages_link, 1):
             image_path = os.path.join(chapter_dir, f"{index:03d}.jpg")
             
-            # Télécharger l'image et la sauvegarder
-            if utils.download_image(url, image_path):
-                # Ajouter le chemin de l'image téléchargée à la liste
-                downloaded_images.append(image_path)
+            if self.domain_name == "sushiscan" and driver:
+                # The URL from sushiscan is a tuple ('index', 'url')
+                image_url = url[1]
+                # Télécharger l'image et la sauvegarder
+                if utils.download_image_with_driver_single(driver, image_url, image_path):
+                    # Ajouter le chemin de l'image téléchargée à la liste
+                    downloaded_images.append(image_path)
+            else:
+                # Télécharger l'image et la sauvegarder
+                if utils.download_image(url, image_path):
+                    # Ajouter le chemin de l'image téléchargée à la liste
+                    downloaded_images.append(image_path)
 
         # Retourner la liste des chemins des images téléchargées
         return downloaded_images

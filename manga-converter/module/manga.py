@@ -17,14 +17,24 @@ class Manga:
             link (string): lien du manga sur le site de scan
         """
         
-        manga_html_page = utils.get_page(link).text
-        
         self.domain_name = utils.get_domain(link)
+        manga_html_page,self.driver = utils.get_page(link)
+
         
         if self.domain_name == "mangakatana":
-            self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = self.__get_info_from_mangakatana(manga_html_page)
+            manga= self.__get_info_from_mangakatana(manga_html_page)
+            if manga!=None:
+                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = manga
+            else:
+                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover=None,None,None,None,None
         elif self.domain_name == "lelmanga":
             manga=self.__get_info_from_lelmanga(manga_html_page)
+            if manga!=None:
+                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = manga
+            else:
+                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover=None,None,None,None,None
+        elif self.domain_name == "sushiscan":
+            manga=self.__get_info_from_sushiscan(manga_html_page)
             if manga!=None:
                 self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = manga
             else:
@@ -80,7 +90,7 @@ class Manga:
         chapters_link_found = re.findall(pattern_links, chapters_html)
         
         for link, data_num  in chapters_link_found:
-             chapters_list.append(Chapter(data_num,manga_name,link))
+             chapters_list.append(Chapter(utils.normalize_volume(data_num),manga_name,link))
 
         return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
     
@@ -145,7 +155,66 @@ class Manga:
             chapters_link_found = re.findall(pattern_links, chapters_html)
         
         for data_num, link in chapters_link_found:
-             chapters_list.append(Chapter(data_num,manga_name,link))
+             chapters_list.append(Chapter(utils.normalize_volume(data_num),manga_name,link))
+
+        return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
+    
+
+    def __get_info_from_sushiscan(self,html_page):
+        """Cette methode privée récupére les informations d'un manga depuis le site www.lelmanga.com
+        Args:
+            html_page (html): correspond a la page html récupéré avec le lien fournis a la création du manga
+        Returns:
+            manga_name (string) : Correspond au nom du manga
+            author (string) : Nom de l'auteur du manga
+            Genres (string[]) : Tout les genres du manga
+            chapters_list (Chapter[]) : Tableau d'objet chapter
+        """
+        manga_name=""
+        author=""
+        genres=[]
+        chapters_list=[]
+        
+        try:
+            # Utiliser re.search pour récupérer uniquement le premier (ou seul) auteur
+            author = re.search(r'<tr><td>Auteur</td><td>([^<]+)</td></tr>', html_page).group(1)
+        except:
+            author = "Autheur inconnu"
+
+        # Utiliser re.search pour récupéré le nom du manga
+        match = re.search(r'<h1[^>]*class=["\']entry-title["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE)
+        if match:
+            manga_name = match.group(1)
+        else:
+            return None 
+        # Regex pour extraire le contenu de la div avec la classe "wd-full"
+        regex = r'<div class="seriestugenre">.*?</div>'
+        block = re.search(regex, html_page, re.S).group()
+
+        genres = re.findall(r'>([^<]+)</a>', block)
+
+        # Nettoyer les espaces et tabulations inutiles dans le HTML
+        clean_html = re.sub(r'\s+', ' ', html_page)
+        
+        regex = r'<div class="thumb"[^>]*>.*?<img[^>]*\s+src=["\']([^"\']+)["\']'
+        match = re.search(regex, clean_html)
+        if match:
+            # Créer un dossier racine pour le manga dans le répertoire temporaire (en utilisant le nom du manga)
+            root_dir = tempfile.gettempdir()+f"/{manga_name}"
+            os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
+    
+            utils.download_image_with_driver_single(self.driver,match.group(1),root_dir+"/thumb.jpg")
+        
+        
+        matches = re.findall(
+            r'data-num="([^"]+)".*?<a\s+href="([^"]+)"',
+            clean_html,
+            re.S
+        )
+        matches.reverse()
+    
+        for data_num, link in matches:
+             chapters_list.append(Chapter(utils.normalize_volume(data_num),manga_name,link))
 
         return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
     

@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+import base64
 import img2pdf
 import zipfile
 import requests
@@ -22,7 +23,7 @@ def get_domain(url):
         return match.group(1)
     return None
 
-def get_page(domain_name,url_request):
+def get_page(url_request):
     """
     Cette fonction permet de récupéré le contenue d'une page web sous format HTML
 
@@ -32,15 +33,17 @@ def get_page(domain_name,url_request):
     Returns:
         string: Le contenu de la page sous format HTML ou None si une érreur s'est produite
     """
-
-    response = None
+    domain_name = get_domain(url_request)
+    return_value = None
+    driver = None
 
     if domain_name == "sushiscan":
         # Options pour rendre la navigation plus humaine
         options = uc.ChromeOptions()
         # options.add_argument('--headless') # Ne pas utiliser le mode headless (sans fenêtre) pour les CAPTCHAs !
         # Initialisation du driver "indétecté"
-        driver = uc.Chrome(options=options)
+        driver = uc.Chrome(options=options, version_main=142)
+        driver.set_script_timeout(120)
 
         try:
             print("Chargement de la page...")
@@ -51,13 +54,11 @@ def get_page(domain_name,url_request):
             input("Appuyez sur Entrée ici une fois le contenu chargé...")
 
             # Récupération des données
-            response = driver.page_source
+            return_value = driver.page_source
             print("Contenu récupéré !")
         except Exception as e:
             print(f"Une erreur est survenue : {e}")
 
-        finally:
-            driver.quit()
     else: 
         s = requests.Session()
         s.headers.update({
@@ -71,11 +72,12 @@ def get_page(domain_name,url_request):
         elif domain_name == "lelmanga":
             s.headers.update({"Referer": "https://mangakatana.com"})
 
-        
+        response = None
         try:
             response = s.get(url_request, timeout=20)  # Ajout d'un timeout
             response.raise_for_status()
-            response.encoding = 'utf-8'   
+            response.encoding = 'utf-8'
+            return_value = response.text    
         except requests.exceptions.HTTPError as error:
             print("An HTTP error occurred:", error)
         except requests.exceptions.ReadTimeout:
@@ -84,8 +86,8 @@ def get_page(domain_name,url_request):
             print("Connection error")
         except requests.exceptions.RequestException as error:
             print("An unexpected error occurred:", error)
-    
-    return response # Retourner le resultat de la requete
+
+    return return_value,driver # Retourner le resultat de la requete
 
 def remove_temp_folder(folder_path):
     if os.path.exists(folder_path):
@@ -121,6 +123,51 @@ def download_image(url, filename):
         return True
     except requests.exceptions.RequestException as error:
         print("Erreur lors du téléchargement :", error)
+        return False
+
+def download_image_with_driver_single(driver, url, filename):
+    """
+    Downloads an image using the session from the provided selenium driver.
+    This method is faster as it uses requests with the driver's cookies.
+    """
+    try:
+        # Get cookies from the driver
+        cookies = driver.get_cookies()
+
+        # Create a requests session
+        s = requests.Session()
+
+        # Add cookies to the session
+        for cookie in cookies:
+            # A cookie domain may not be defined, in which case it is only valid for the current domain.
+            if 'domain' in cookie:
+                s.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
+            else:
+                s.cookies.set(cookie['name'], cookie['value'])
+
+        # Get User-Agent and Referer from driver and set them in the session
+        user_agent = driver.execute_script("return navigator.userAgent;")
+        referer_url = driver.current_url
+        s.headers.update({
+            "User-Agent": user_agent,
+            "Referer": referer_url
+        })
+
+        # Download the image
+        response = s.get(url, timeout=30)
+        response.raise_for_status()
+
+        # Save the image
+        with open(filename, "wb") as file:
+            file.write(response.content)
+
+        return True
+
+    except requests.exceptions.RequestException as e:
+        print(f"Erreur lors du téléchargement de l'image avec la session : {e}")
+        return False
+    except Exception as e:
+        print(f"Une erreur inattendue est survenue lors du téléchargement avec la session : {e}")
         return False
 
 def images_to_pdf(img_list, output_pdf):
@@ -170,8 +217,7 @@ def images_to_cbz(image_paths, cbz_path):
             cbz.write(image_path, os.path.basename(image_path))
     
     print(f'Conversion en CBZ terminée : {cbz_path}')
-    
-# Fonction pour extraire le numéro du chapitre
-def extraire_numero(fichier):
-    match = re.search(r"chapter_(\d+)", fichier)
-    return int(match.group(1)) if match else float('inf')
+
+def normalize_volume(label: str) -> int:
+    m = re.search(r'\d+', label)
+    return int(m.group()) if m else None
