@@ -23,7 +23,7 @@ def get_domain(url:str)->str:
         return match.group(1)
     return None
 
-def get_page(url_request:str)->tuple[str,uc.Chrome]|None:
+def get_page(url_request:str,require_driver)->tuple[str,uc.Chrome]|None:
     """
     Cette fonction permet de récupéré le contenue d'une page web sous format HTML
 
@@ -37,7 +37,7 @@ def get_page(url_request:str)->tuple[str,uc.Chrome]|None:
     return_value = None
     driver = None
 
-    if domain_name == "sushiscan":
+    if require_driver:
         # Options pour rendre la navigation plus humaine
         options = uc.ChromeOptions()
         # options.add_argument('--headless') # Ne pas utiliser le mode headless (sans fenêtre) pour les CAPTCHAs !
@@ -58,7 +58,6 @@ def get_page(url_request:str)->tuple[str,uc.Chrome]|None:
             print("Contenu récupéré !")
         except Exception as e:
             print(f"Une erreur est survenue : {e}")
-
     else: 
         s = requests.Session()
         s.headers.update({
@@ -105,25 +104,28 @@ def remove_temp_folder(folder_path :str)->None:
     else:
         print(f"Le dossier {folder_path} n'existe pas.")
 
-def download_image(url:str, filename:str)->bool:
+def download_image(url:str, filename:str,require_driver:bool,driver:uc.Chrome)->bool:
     """
     Cette fonction est utilisée pour télécharger une image à partir de son url
     Args:
         url (lien): le lien de l'image à télécharger
         filename (string): chemin du fichier et nom du fichier telecharger
     """
-    try:
-        response = requests.get(url, timeout=20)
-        response.raise_for_status()  # Vérifie si la requête a réussi
-        
-        with open(filename, "wb") as file:  # Ouvrir en mode binaire
-            file.write(response.content)  # Écrire le contenu brut de l'image
-        
-        #print(f"Image téléchargée : {filename}")
-        return True
-    except requests.exceptions.RequestException as error:
-        print("Erreur lors du téléchargement :", error)
-        return False
+    if require_driver and driver is not None:
+        return download_image_with_driver_single(driver, url, filename)
+    else:
+        try:
+            response = requests.get(url, timeout=20)
+            response.raise_for_status()  # Vérifie si la requête a réussi
+            
+            with open(filename, "wb") as file:  # Ouvrir en mode binaire
+                file.write(response.content)  # Écrire le contenu brut de l'image
+            
+            #print(f"Image téléchargée : {filename}")
+            return True
+        except requests.exceptions.RequestException as error:
+            print("Erreur lors du téléchargement :", error)
+            return False
 
 def download_image_with_driver_single(driver:uc.Chrome, url:str, filename:str)->bool:
     """

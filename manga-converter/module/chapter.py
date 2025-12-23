@@ -3,10 +3,11 @@ import re
 import os
 import tempfile
 import utils
+from module.abstract_classes.BaseScaper import BaseScraper
 
 class Chapter:
     """Cette classe est utilisé pour définir un chapitre dans un manga, un chapitre posséde plusieurs pages (image récupérée depuis le site)"""
-    def __init__(self,id:int,manga_name:str,link:str)->None:
+    def __init__(self,id:int,manga_name:str,link:str, scraper: BaseScraper)->None:
         """
         Cette fonction est appalée à chaque création d'un chapitre, elle permet de récupéré les informations en fonctions du lien et des sites supporté
 
@@ -15,9 +16,8 @@ class Chapter:
         """
         self.id_chapter = id
         self.manga_name = manga_name
-        self.chapter_html_page = None
         self.chapter_html_link = link
-        self.domain_name = utils.get_domain(link)
+        self.scraper = scraper
         self.pages_link = []
         self.pages_path = []
         self.converted_pdf_chapters_path = None
@@ -29,7 +29,7 @@ class Chapter:
             self.converted_cbr_chapters_path = f"./export/{self.manga_name}/cbr/chapter_{self.id()}.cbr"
         
         self.converted_cbz_chapters_path = None
-        if os.path.exists(f"./export/{self.manga_name}/cbr/chapter_{self.id()}.cbz"):
+        if os.path.exists(f"./export/{self.manga_name}/cbz/chapter_{self.id()}.cbz"):
             self.converted_cbz_chapters_path = f"./export/{self.manga_name}/cbz/chapter_{self.id()}.cbz"
             
     def id(self):
@@ -47,7 +47,7 @@ class Chapter:
         if self.pages_path:  # Déjà fait
             return True
 
-        max_retries = 2
+        max_retries = 5
         for attempt in range(1, max_retries + 1):
             success = self._try_fetch_images()
             if success:
@@ -66,22 +66,11 @@ class Chapter:
     def _try_fetch_images(self)->bool:
         driver = None
         try:
-            # Récupérer et nettoyer la page HTML
-            if not self.chapter_html_page:
-                html, driver = utils.get_page(self.chapter_html_link)
-                if not html:
-                    print(f"❌ Impossible de récupérer la page HTML pour le chapitre {self.id()}.")
-                    return False
-                self.chapter_html_page = re.sub(r'\s+', ' ', html)
-
             # Extraire les liens si pas déjà fait
             if not self.pages_link:
-                if self.domain_name == "mangakatana":
-                    self.pages_link = self.__get_pages_link_from_mangakatana()
-                elif self.domain_name == "lelmanga":
-                    self.pages_link = self.__get_pages_link_from_lelmanga()
-                elif self.domain_name == "sushiscan":
-                    self.pages_link = self.__get_pages_link_from_sushiscan()
+                # Utilise le scraper pour obtenir les liens des images.
+                # La logique de récupération de page est maintenant dans le scraper.
+                self.pages_link,driver = self.scraper.get_chapter_images(self.chapter_html_link)
 
             if not self.pages_link:
                 print(f"❌ Pas de pages trouvées pour chapitre {self.id()}")
@@ -98,12 +87,10 @@ class Chapter:
             if not self.pages_path or len(self.pages_path) != len(self.pages_link):
                 print(f"❌ Problème avec le téléchargement des images du chapitre {self.id()} (téléchargées: {len(self.pages_path)}, attendues: {len(self.pages_link)})")
                 return False
-        finally:
-            if driver:
-                driver.quit()
-
-        return True
-
+            return True
+        except Exception as e:
+            print(f"❌ Erreur lors de la récupération des images du chapitre {self.id()}: {e}")
+            return False
 
     def download(self, format:str)->bool:
         if not self.fetch_images():
@@ -118,64 +105,7 @@ class Chapter:
         
         return True  # Aucun format = téléchargement seul
 
-    def __get_pages_link_from_mangakatana(self)->list[str]:
-        """
-        Cette méthode récupère les liens de toutes les pages d'un chapitre du site mangakatana.com.
-        Elle extrait les liens des pages à partir du code JavaScript de la page HTML.
-
-        La méthode utilise une expression régulière pour rechercher une variable JavaScript contenant un tableau des URLs des pages.
-
-        Retour:
-            list: Un tableau de chaînes de caractères contenant les liens des pages du chapitre dans l'ordre.
-        """
-        # Définir le modèle d'expression régulière pour rechercher la variable JavaScript contenant les liens des pages
-        pattern = r"var\s+thzq\s*=\s*(\[[^\]]+\])"
-        
-        # Rechercher la correspondance dans la page HTML du chapitre
-        match = re.search(pattern, self.chapter_html_page, re.DOTALL)
-        
-        # Si une correspondance est trouvée, on renvoie le contenu du tableau de liens
-        if match is not None:
-            return json.loads(match.group(1))  # Evaluer la chaîne de caractères en un tableau Python
-    
-    def __get_pages_link_from_lelmanga(self)->list[str]:
-        """
-        Cette méthode récupère les liens de toutes les pages d'un chapitre du site lelmanga.com.
-        Elle extrait les liens des pages en utilisant une expression régulière qui recherche les attributs `src` des images.
-
-        Retour:
-            list: Un tableau de chaînes de caractères contenant les liens des pages du chapitre dans l'ordre.
-        """
-        # Définir le modèle d'expression régulière pour extraire les liens des images depuis les balises <img>
-        regex = r'<img\s+loading=["\']lazy["\'][^>]*\s+src=["\']([^"\']+)["\']'
-        
-        # Trouver toutes les correspondances dans la page HTML pour extraire les liens des images
-        matches = re.findall(regex, self.chapter_html_page)
-        
-        # Si des correspondances sont trouvées, renvoyer la liste des liens des pages
-        if matches is not None:
-            return matches
-        
-    def __get_pages_link_from_sushiscan(self)->list[str]:
-        """
-        Cette méthode récupère les liens de toutes les pages d'un chapitre du site sushiscan.com.
-        Elle extrait les liens des pages en utilisant une expression régulière qui recherche les attributs `data-src` des images.
-
-        Retour:
-            list: Un tableau de chaînes de caractères contenant les liens des pages du chapitre dans l'ordre.
-        """
-        # Définir le modèle d'expression régulière pour extraire les liens des images depuis les balises <img>
-        regex = r'<img[^>]+data-index=["\'](\d+)["\'][^>]+data-src=["\']([^"\']+)["\']'
-        
-        # Trouver toutes les correspondances dans la page HTML pour extraire les liens des images
-        matches = re.findall(regex, self.chapter_html_page)
-        
-        # Si des correspondances sont trouvées, renvoyer la liste des liens des pages
-        if matches is not None:
-            return matches
-
-    
-    def __download_chapter_images(self, driver=None)->list[str]:
+    def __download_chapter_images(self,driver=None)->list[str]:
         """
         Cette méthode télécharge toutes les images d'un chapitre et les stocke dans un dossier temporaire.
         Elle vérifie d'abord si les images existent en cache et demande à l'utilisateur s'il veut les réutiliser.
@@ -214,19 +144,10 @@ class Chapter:
         # Télécharger chaque image du chapitre et enregistrer dans le dossier du chapitre
         for index, url in enumerate(self.pages_link, 1):
             image_path = os.path.join(chapter_dir, f"{index:03d}.jpg")
-            
-            if self.domain_name == "sushiscan" and driver:
-                # The URL from sushiscan is a tuple ('index', 'url')
-                image_url = url[1]
-                # Télécharger l'image et la sauvegarder
-                if utils.download_image_with_driver_single(driver, image_url, image_path):
-                    # Ajouter le chemin de l'image téléchargée à la liste
-                    downloaded_images.append(image_path)
-            else:
-                # Télécharger l'image et la sauvegarder
-                if utils.download_image(url, image_path):
-                    # Ajouter le chemin de l'image téléchargée à la liste
-                    downloaded_images.append(image_path)
+            # La logique de téléchargement spécifique (ex: avec un driver pour sushiscan)
+            # devra être gérée par le scraper correspondant à l'avenir.
+            if utils.download_image(url, image_path,self.scraper.do_require_driver(),driver):
+                downloaded_images.append(image_path)
 
         # Retourner la liste des chemins des images téléchargées
         return downloaded_images

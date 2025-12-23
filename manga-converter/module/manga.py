@@ -7,214 +7,59 @@ from ebooklib import epub
 
 import utils
 from module.chapter import Chapter
+# Import des scrapers concrets
+from module.scrapers.mangakatana_scraper import MangakatanaScraper
+from module.scrapers.lelmanga_scraper import LelmangaScraper
+from module.scrapers.sushiscan_scraper import SushiscanScraper
+# Les autres scrapers seront importés ici au fur et à mesure de leur création
+
+# Dictionnaire pour mapper les domaines aux classes de scraper (le "Strategy" mapping)
+SCRAPERS = {
+    "mangakatana": MangakatanaScraper,
+    "lelmanga": LelmangaScraper,
+    "sushiscan": SushiscanScraper,
+}
+
+def get_scraper_from_domain(domain):
+    """Trouve et instancie le scraper approprié pour un domaine donné."""
+    for scraper_domain, scraper_class in SCRAPERS.items():
+        if scraper_domain in domain:
+            return scraper_class()
+    return None
 
 class Manga:
     """Cette classe est utilisé pour définir un manga, un manga possede plusieurs chapitres (objet de la classe chapitre)"""
     def __init__(self,link:str)->None:
         """Cette methode est appalée à chaque création d'un manga, elle permet de récupéré les informations en fonction du lien et des sites supporté
-
         Args:
             link (string): lien du manga sur le site de scan
         """
         
         self.domain_name = utils.get_domain(link)
-        manga_html_page,self.driver = utils.get_page(link)
+        self.link = link
+        self.scraper = get_scraper_from_domain(self.domain_name)
         
-        if self.domain_name == "mangakatana":
-            manga= self.__get_info_from_mangakatana(manga_html_page)
-            if manga!=None:
-                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = manga
-            else:
-                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover=None,None,None,None,None
-        elif self.domain_name == "lelmanga":
-            manga=self.__get_info_from_lelmanga(manga_html_page)
-            if manga!=None:
-                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = manga
-            else:
-                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover=None,None,None,None,None
-        elif self.domain_name == "sushiscan":
-            manga=self.__get_info_from_sushiscan(manga_html_page)
-            if manga!=None:
-                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover = manga
-            else:
-                self.manga_name,self.author,self.manga_genres,self.manga_chapters,self.cover=None,None,None,None,None
+        if not self.scraper:
+            raise Exception(f"Le site {self.domain_name} n'est pas supporté par le programme")
+        
+        details = self.scraper.get_manga_details(self.link)
+        
+        if details:
+            self.manga_name = details.get('manga_name')
+            self.author = details.get('author')
+            self.manga_genres = details.get('manga_genres', [])
+            self.cover = details.get('cover')
+            self.manga_chapters = [
+                Chapter(
+                    id=chap_data['id'],
+                    manga_name=self.manga_name,
+                    link=chap_data['link'],
+                    scraper=self.scraper  # On passe l'instance du scraper au chapitre
+                ) for chap_data in details.get('chapters_data', [])
+            ]
         else:
-            raise Exception("Le site utilisé n'est pas supporté par le programme")
-    
-    def __get_info_from_mangakatana(self,html_page:str)->tuple[str,str,list,str,list]:
-        """Cette methode privée récupére les informations relative a un manga si le lien fournis viens du site mangakatana
-
-        Args:
-            html_page (html): correspond à la page html récupéré avec le lien fournis a la création du manga
-
-        Returns:
-            manga_name (string) : Correspond au nom du manga
-            author (string) : Nom de l'auteur du manga
-            Genres (string[]) : Tout les genres du manga
-            chapters_list (Chapter[]) : Tableau d'objet chapter
-        """
-        manga_name=""
-        author=""
-        genres=[]
-        chapters_list=[]
-
-        manga_name = re.search(r'<h1[^>]*class=["\'][^"\']*heading[^"\']*["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE).group(1)
-        author_search = re.search(r'<a class=["\']author["\'][^>]*>(.*?)<\/a>',html_page)
-        author = "autheur inconnu " if author_search == None else author_search.group(1)
-        
-        match_div =  re.search(r'<div class=["\']genres["\'][^>]*>(.*?)<\/div>', html_page, re.DOTALL)
-        genres_html = match_div.group(1)
-        # Récupére tout les genres
-        genres = re.findall(r'<a[^>]*>(.*?)<\/a>', genres_html)
-        
-
-        regex = r'<div class="cover"[^>]*>.*?<img[^>]*\s+src=["\']([^"\']+)["\']'
-        match = re.search(regex, html_page)
-        if match:
-            # Créer un dossier racine pour le manga dans le répertoire temporaire (en utilisant le nom du manga)
-            root_dir = tempfile.gettempdir()+f"/{manga_name}"
-            os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
-            utils.download_image(match.group(1),root_dir+"/thumb.jpg")
-                
-        # Nettoyer les espaces et tabulations inutiles dans le HTML
-        clean_html = re.sub(r'\s+', ' ', html_page)
-        # Extraire la première div avec la classe "chapters" qui est suivis de l'initialisation du tableau
-        pattern_div = r'<div class="chapters">.*?<table class="uk-table uk-table-striped"[^>]*>(.*?)</table>.*?</div>'
-        match_div = re.search(pattern_div, clean_html, re.DOTALL)
-        # Récupérer le contenu de la table
-        chapters_html = match_div.group(1)
-        # Extraire tous les liens href à l'intérieur de la table
-        pattern_links = r'<a[^>]*href=["\'](https?://[^"\'<>]+)["\'][^>]*>\s*Chapter\s*(\d+)'
-  
-        chapters_link_found = re.findall(pattern_links, chapters_html)
-        
-        for link, data_num  in chapters_link_found:
-             chapters_list.append(Chapter(utils.normalize_volume(data_num),manga_name,link))
-
-        return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
-    
-    def __get_info_from_lelmanga(self,html_page:str)->tuple[str,str,list,str,list]:
-        """Cette methode privée récupére les informations d'un manga depuis le site www.lelmanga.com
-        Args:
-            html_page (html): correspond a la page html récupéré avec le lien fournis a la création du manga
-        Returns:
-            manga_name (string) : Correspond au nom du manga
-            author (string) : Nom de l'auteur du manga
-            Genres (string[]) : Tout les genres du manga
-            chapters_list (Chapter[]) : Tableau d'objet chapter
-        """
-        manga_name=""
-        author=""
-        genres=[]
-        chapters_list=[]
-        
-        try:
-            # Utiliser re.search pour récupérer uniquement le premier (ou seul) auteur
-            author = re.search(r'<div class=["\']imptdt["\'][^>]*>\s*Auteur\s*<i>(.*?)<\/i>', html_page).group(1)
-        except:
-            author = "Autheur inconnu"
-
-        # Utiliser re.search pour récupéré le nom du manga
-        match = re.search(r'<h1[^>]*class=["\']entry-title["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE)
-        if match:
-            manga_name = match.group(1)
-        else:
-            return None 
-        # Regex pour extraire le contenu de la div avec la classe "wd-full"
-        pattern_div = r'<div class=["\']wd-full["\'][^>]*>\s*<span class=["\']mgen["\'][^>]*>(.*?)<\/span><\/div>'
-        match_div = re.search(pattern_div, html_page,re.DOTALL)
-        # Si la div est trouvée, extraire les genres dans les balises <a>
-        if match_div:
-            genres_html = match_div.group(1)  # Contenu de <span class="mgen">
-            pattern_genres = r'<a[^>]*href=["\'][^"\'<>]*["\'][^>]*>(.*?)<\/a>'
-            genres = re.findall(pattern_genres, genres_html)
-        
-        # Nettoyer les espaces et tabulations inutiles dans le HTML
-        clean_html = re.sub(r'\s+', ' ', html_page)
-        
-        regex = r'<div class="thumb"[^>]*>.*?<img[^>]*\s+src=["\']([^"\']+)["\']'
-        match = re.search(regex, clean_html)
-        if match:
-            # Créer un dossier racine pour le manga dans le répertoire temporaire (en utilisant le nom du manga)
-            root_dir = tempfile.gettempdir()+f"/{manga_name}"
-            os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
-    
-            utils.download_image(match.group(1),root_dir+"/thumb.jpg")
-        
-        
-        # Regex pour extraire le contenu de la div "eplister" et récupérer les liens dans les balises <a>
-        pattern_div = r'<div class=["\']eplister["\'][^>]*><ul[^>]*>(.*?)<\/ul><\/div>'
-        match_div = re.search(pattern_div, clean_html, re.DOTALL)
-        # Si la div est trouvée, extraire les liens des chapitres
-        if match_div:
-            chapters_html = match_div.group(1)  # Contenu de <ul> avec les chapitres
-            # Regex pour extraire tous les liens dans les balises <a>, sans se baser sur le nom du manga
-            pattern_links = r'<li data-num=["\']([\d\.]+)["\'].*?<a href=["\'](https://www\.lelmanga\.com/[^"\']+)["\']'
-
-            chapters_link_found = re.findall(pattern_links, chapters_html)
-        
-        for data_num, link in chapters_link_found:
-             chapters_list.append(Chapter(utils.normalize_volume(data_num),manga_name,link))
-
-        return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
-    
-    def __get_info_from_sushiscan(self,html_page:str)->tuple[str,str,list,str,list]:
-        """Cette methode privée récupére les informations d'un manga depuis le site www.lelmanga.com
-        Args:
-            html_page (html): correspond a la page html récupéré avec le lien fournis a la création du manga
-        Returns:
-            manga_name (string) : Correspond au nom du manga
-            author (string) : Nom de l'auteur du manga
-            Genres (string[]) : Tout les genres du manga
-            chapters_list (Chapter[]) : Tableau d'objet chapter
-        """
-        manga_name=""
-        author=""
-        genres=[]
-        chapters_list=[]
-        
-        try:
-            # Utiliser re.search pour récupérer uniquement le premier (ou seul) auteur
-            author = re.search(r'<tr><td>Auteur</td><td>([^<]+)</td></tr>', html_page).group(1)
-        except:
-            author = "Autheur inconnu"
-
-        # Utiliser re.search pour récupéré le nom du manga
-        match = re.search(r'<h1[^>]*class=["\']entry-title["\'][^>]*>(.*?)<\/h1>', html_page, re.IGNORECASE)
-        if match:
-            manga_name = match.group(1)
-        else:
-            return None 
-        # Regex pour extraire le contenu de la div avec la classe "wd-full"
-        regex = r'<div class="seriestugenre">.*?</div>'
-        block = re.search(regex, html_page, re.S).group()
-
-        genres = re.findall(r'>([^<]+)</a>', block)
-
-        # Nettoyer les espaces et tabulations inutiles dans le HTML
-        clean_html = re.sub(r'\s+', ' ', html_page)
-        
-        regex = r'<div class="thumb"[^>]*>.*?<img[^>]*\s+src=["\']([^"\']+)["\']'
-        match = re.search(regex, clean_html)
-        if match:
-            # Créer un dossier racine pour le manga dans le répertoire temporaire (en utilisant le nom du manga)
-            root_dir = tempfile.gettempdir()+f"/{manga_name}"
-            os.makedirs(root_dir, exist_ok=True)  # Créer le dossier s'il n'existe pas
-    
-            utils.download_image_with_driver_single(self.driver,match.group(1),root_dir+"/thumb.jpg")
-        
-        
-        matches = re.findall(
-            r'data-num="([^"]+)".*?<a\s+href="([^"]+)"',
-            clean_html,
-            re.S
-        )
-        matches.reverse()
-    
-        for data_num, link in matches:
-             chapters_list.append(Chapter(utils.normalize_volume(data_num),manga_name,link))
-
-        return manga_name, author,genres, chapters_list,root_dir+"/thumb.jpg"
+            # Initialisation en cas d'échec du scraping
+            self.manga_name, self.author, self.manga_genres, self.manga_chapters, self.cover = None, None, [], [], None
     
     def review(self):
         """
@@ -231,8 +76,10 @@ class Manga:
         higher_id = 0
         for chapter in self.manga_chapters:
             higher_id = chapter.id() if chapter.id() >= higher_id else higher_id
-        
-        print("Nombre de chapitre :",higher_id)
+        lower_id = higher_id
+        for chapter in self.manga_chapters:
+            lower_id = chapter.id() if chapter.id() <= lower_id else lower_id
+        print("Nombre de chapitre :", lower_id ,"-", higher_id)
         print("\n")
     
     def download_chapter(self, chapter_number:int,format:str="CBZ")->bool:
@@ -283,12 +130,20 @@ class Manga:
         if end_chapter is None:
             end_chapter = start_chapter
 
+        list_of_chapter_ids = [chapter.id() for chapter in self.manga_chapters]
+        if start_chapter not in list_of_chapter_ids:
+            print(f"❌ Le chapitre {start_chapter} n'existe pas pour ce manga sur le site {self.domain_name}")
+            return False
+        elif end_chapter not in list_of_chapter_ids:
+            print(f"❌ Le chapitre {end_chapter} n'existe pas pour ce manga sur le site {self.domain_name}")
+            return False
+
 
         book = epub.EpubBook()
 
         book.set_identifier(self.manga_name)
         book.set_title(self.manga_name)
-        book.set_language("fr" if self.domain_name == "lelmanga" else "en")
+        book.set_language(self.scraper.get_language())
         book.add_author(self.author)
 
         cover_path = os.path.join(tempfile.gettempdir(), self.manga_name, "thumb.jpg")
@@ -386,7 +241,11 @@ class Manga:
         book.add_item(epub.EpubNcx())
         book.add_item(epub.EpubNav())
 
-        output_path = f"./export/{self.manga_name}/{self.manga_name}_{start_chapter}-{end_chapter}.epub"
+        output_path = f"./export/{self.manga_name}/{self.manga_name}_{start_chapter}"
+        if start_chapter != end_chapter:
+            output_path += f"-{end_chapter}"
+        output_path += ".epub"
+
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         epub.write_epub(output_path, book)
