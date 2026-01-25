@@ -42,7 +42,7 @@ def get_page(url_request:str,require_driver)->tuple[str,uc.Chrome]|None:
         options = uc.ChromeOptions()
         # options.add_argument('--headless') # Ne pas utiliser le mode headless (sans fenêtre) pour les CAPTCHAs !
         # Initialisation du driver "indétecté"
-        driver = uc.Chrome(options=options, version_main=142)
+        driver = uc.Chrome(options=options, version_main=144)
         driver.set_script_timeout(120)
 
         try:
