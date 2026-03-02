@@ -10,11 +10,14 @@ class SushiscanScraper(BaseScraper):
 
     def __init__(self):
         super().__init__("https://sushiscan.fr")
+        self.driver=None
 
     def get_manga_details(self, manga_url: str) -> dict:
         html_page, driver = utils.get_page(manga_url,self.do_require_driver())
         if not html_page:
             return {}
+        
+        self.driver = driver
 
         soup = BeautifulSoup(html_page, 'html.parser')
         details = {}
@@ -43,14 +46,11 @@ class SushiscanScraper(BaseScraper):
             root_dir = os.path.join(tempfile.gettempdir(), details['manga_name'])
             os.makedirs(root_dir, exist_ok=True)
             cover_path = os.path.join(root_dir, "thumb.jpg")
-            utils.download_image(cover_url, cover_path,self.do_require_driver(),driver)
+            utils.download_image(cover_url, cover_path,self.do_require_driver(),self.driver)
             details['cover'] = cover_path
         else:
             details['cover'] = None
             
-        if driver:
-            driver.quit()
-
         # Chapitres
         chapters_data = []
         # Souvent dans une liste avec id #chapterlist
@@ -75,7 +75,7 @@ class SushiscanScraper(BaseScraper):
         return details
 
     def get_chapter_images(self, chapter_url: str) -> list:
-        html_page, driver = utils.get_page(chapter_url,self.do_require_driver())
+        html_page, driver = utils.get_page(chapter_url,self.do_require_driver(),self.driver)
         if not html_page:
             return [],None
 

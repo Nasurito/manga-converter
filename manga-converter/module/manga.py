@@ -60,7 +60,7 @@ class Manga:
         else:
             # Initialisation en cas d'échec du scraping
             self.manga_name, self.author, self.manga_genres, self.manga_chapters, self.cover = None, None, [], [], None
-    
+
     def review(self):
         """
         Cette fonction permet d'afficher les informations relative a un manga sous cette forme :

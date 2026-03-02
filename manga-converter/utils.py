@@ -23,7 +23,7 @@ def get_domain(url:str)->str:
         return match.group(1)
     return None
 
-def get_page(url_request:str,require_driver)->tuple[str,uc.Chrome]|None:
+def get_page(url_request:str,require_driver,passed_driver:uc.Chrome=None)->tuple[str,uc.Chrome]|None:
     """
     Cette fonction permet de récupéré le contenue d'une page web sous format HTML
 
@@ -38,12 +38,16 @@ def get_page(url_request:str,require_driver)->tuple[str,uc.Chrome]|None:
     driver = None
 
     if require_driver:
-        # Options pour rendre la navigation plus humaine
-        options = uc.ChromeOptions()
-        # options.add_argument('--headless') # Ne pas utiliser le mode headless (sans fenêtre) pour les CAPTCHAs !
-        # Initialisation du driver "indétecté"
-        driver = uc.Chrome(options=options, version_main=144)
-        driver.set_script_timeout(120)
+
+        if passed_driver:
+            driver = passed_driver
+        else:
+            # Options pour rendre la navigation plus humaine
+            options = uc.ChromeOptions()
+            # options.add_argument('--headless') # Ne pas utiliser le mode headless (sans fenêtre) pour les CAPTCHAs !
+            # Initialisation du driver "indétecté"
+            driver = uc.Chrome(options=options, version_main=144)
+            driver.set_script_timeout(120)
 
         try:
             print("Chargement de la page...")
