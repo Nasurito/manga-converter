@@ -81,3 +81,11 @@ def test_cache_is_ignored_with_use_cache_false(workspace, no_prompt):
     chapter = Chapter(1, "Manga", "x", FakeScraper())
     assert chapter.fetch_images(use_cache=False) is True
     assert len(workspace) == 3  # toutes les images re-téléchargées
+
+
+def test_unsafe_manga_name_is_cleaned_in_paths(workspace, no_prompt):
+    chapter = Chapter(1, "Re:Zero / Arc 1?", "x", FakeScraper(), output_dir="mes_mangas")
+
+    assert chapter.export_path("CBZ") == os.path.join("mes_mangas", "Re_Zero _ Arc 1_", "cbz", "chapter_1.cbz")
+    assert chapter.download("CBZ") is True
+    assert os.path.exists(chapter.export_path("CBZ"))

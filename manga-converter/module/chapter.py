@@ -1,7 +1,7 @@
 import os
 import tempfile
 import utils
-from module.abstract_classes.BaseScaper import BaseScraper
+from module.abstract_classes.base_scraper import BaseScraper
 
 # Fonction de conversion associée à chaque format de sortie (l'extension du fichier est le format en minuscule)
 CONVERTERS = {
@@ -12,15 +12,18 @@ CONVERTERS = {
 
 class Chapter:
     """Cette classe est utilisé pour définir un chapitre dans un manga, un chapitre posséde plusieurs pages (image récupérée depuis le site)"""
-    def __init__(self,id:int,manga_name:str,link:str, scraper: BaseScraper)->None:
+    def __init__(self,id:int,manga_name:str,link:str, scraper: BaseScraper, output_dir:str="./export")->None:
         """
         Cette fonction est appalée à chaque création d'un chapitre, elle permet de récupéré les informations en fonctions du lien et des sites supporté
 
         Args:
             link (string): lien du chapitre sur le site de scan
+            output_dir (string): dossier dans lequel les chapitres convertis sont exportés
         """
         self.id_chapter = id
         self.manga_name = manga_name
+        self.folder_name = utils.safe_filename(manga_name)  # nom utilisable dans les chemins
+        self.output_dir = output_dir
         self.chapter_html_link = link
         self.scraper = scraper
         self.pages_link = []
@@ -32,7 +35,7 @@ class Chapter:
     def export_path(self, format:str)->str:
         """Retourne le chemin du fichier exporté pour un format donné (ex: ./export/<manga>/cbz/chapter_1.cbz)."""
         extension = format.lower()
-        return os.path.join("./export", self.manga_name, extension, f"chapter_{self.id()}.{extension}")
+        return os.path.join(self.output_dir, self.folder_name, extension, f"chapter_{self.id()}.{extension}")
 
     def fetch_images(self, use_cache:bool=True)->bool:
         """
@@ -108,7 +111,7 @@ class Chapter:
         Retour:
             list: Une liste contenant les chemins des fichiers téléchargés pour chaque image du chapitre.
         """
-        chapter_dir = os.path.join(tempfile.gettempdir(), self.manga_name, f"chapter_{self.id()}")
+        chapter_dir = os.path.join(tempfile.gettempdir(), self.folder_name, f"chapter_{self.id()}")
         os.makedirs(chapter_dir, exist_ok=True)
 
         # Vérifier le cache

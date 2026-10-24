@@ -8,20 +8,26 @@ from module.scrapers import get_scraper_from_domain
 
 class Manga:
     """Cette classe est utilisé pour définir un manga, un manga possede plusieurs chapitres (objet de la classe chapitre)"""
-    def __init__(self,link:str)->None:
+    def __init__(self,link:str,output_dir:str="./export")->None:
         """Cette methode est appalée à chaque création d'un manga, elle permet de récupéré les informations en fonction du lien et des sites supporté
         Args:
             link (string): lien du manga sur le site de scan
+            output_dir (string): dossier dans lequel les fichiers sont exportés
         """
         
         self.domain_name = utils.get_domain(link)
         self.link = link
+        self.output_dir = output_dir
         self.scraper = get_scraper_from_domain(self.domain_name)
         
         if not self.scraper:
             raise Exception(f"Le site {self.domain_name} n'est pas supporté par le programme")
         
-        details = self.scraper.get_manga_details(self.link)
+        try:
+            details = self.scraper.get_manga_details(self.link)
+        except Exception:
+            self.close()
+            raise
         
         if details:
             self.manga_name = details.get('manga_name')
@@ -33,12 +39,23 @@ class Manga:
                     id=chap_data['id'],
                     manga_name=self.manga_name,
                     link=chap_data['link'],
-                    scraper=self.scraper  # On passe l'instance du scraper au chapitre
+                    scraper=self.scraper,  # On passe l'instance du scraper au chapitre
+                    output_dir=self.output_dir
                 ) for chap_data in details.get('chapters_data', [])
             ]
         else:
             # Initialisation en cas d'échec du scraping
             self.manga_name, self.author, self.manga_genres, self.manga_chapters, self.cover = None, None, [], [], None
+
+    def close(self)->None:
+        """Libère les ressources du scraper (ex: ferme le navigateur ouvert pour le CAPTCHA)."""
+        self.scraper.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
 
     def review(self):
         """
@@ -209,7 +226,8 @@ class Manga:
         book.add_item(epub.EpubNcx())
         book.add_item(epub.EpubNav())
 
-        output_path = f"./export/{self.manga_name}/{self.manga_name}_{start_chapter}"
+        folder_name = utils.safe_filename(self.manga_name)
+        output_path = os.path.join(self.output_dir, folder_name, f"{folder_name}_{start_chapter}")
         if start_chapter != end_chapter:
             output_path += f"-{end_chapter}"
         output_path += ".epub"

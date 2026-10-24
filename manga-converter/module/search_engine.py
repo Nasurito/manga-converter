@@ -1,47 +1,43 @@
-from module.manga import Manga
+import utils
 from module.scrapers import SCRAPERS
 
 LANGUAGES = {"fr": "VF", "en": "EN"}
 
-class Search_engine:
+class SearchEngine:
     def __init__(self,key_word):
         """ Cette methode est appelée à chaque création d'une recherche de manga,
-            Elle permet de récupéré les manga en fonction du nom sur les sites supporté
+            Elle permet de récupéré les manga en fonction du nom sur les sites supporté.
+            Seuls les titres et les liens sont récupérés : le manga choisi est chargé ensuite.
 
         Args:
             key_word (string): nom du manga a chercher sur les sites de scans
         """
-        # Résultats regroupés par langue : {"fr": [Manga, ...], "en": [...]}
+        # Résultats regroupés par langue : {"fr": [(titre, url), ...], "en": [...]}
         self.results = {language: [] for language in LANGUAGES}
-        self.selected_manga = None
 
         for scraper_class in SCRAPERS.values():
             scraper = scraper_class()
-            for link in scraper.search(key_word):
-                try:
-                    manga = Manga(link)
-                except Exception as e:
-                    print(f"⚠️ Impossible de charger {link} : {e}")
-                    continue
-                if manga.manga_name is not None:
-                    self.results.setdefault(scraper.get_language(), []).append(manga)
+            try:
+                self.results.setdefault(scraper.get_language(), []).extend(scraper.search(key_word))
+            finally:
+                scraper.close()
 
         print("Resultat de recherche pour mot clé : ",key_word)
-        self.__listing()
+        self._print_results()
 
-    def __listing(self):
+    def _print_results(self):
         """ Affiche tout les mangas qui ont été récupérés avec le nom des sites en question """
         for language, mangas in self.results.items():
             print(f"--------------------- {LANGUAGES.get(language, language.upper())} ------------------")
             if mangas:
-                for manga in mangas:
-                    print(manga.manga_name ," - ",manga.domain_name)
+                for title, url in mangas:
+                    print(title ," - ",utils.get_domain(url))
             else:
                 print("Aucune correspondance")
 
-    def Select_Manga(self)->Manga:
+    def select_manga(self)->str:
         """
-        Cette Methode permet a l'utilisateur de séléctionner un manga parmi les résultats et le retourne
+        Cette Methode permet a l'utilisateur de séléctionner un manga parmi les résultats et retourne son url
         """
         languages = [language for language, mangas in self.results.items() if mangas]
         if not languages:
@@ -52,17 +48,17 @@ class Search_engine:
             print("Quelle langue vous intéresse ?")
             for i, language in enumerate(languages, start=1):
                 print(f"{i} : {LANGUAGES.get(language, language.upper())}")
-            list_to_use = self.results[languages[self.__ask_index(len(languages))]]
+            list_to_use = self.results[languages[self._ask_index(len(languages))]]
 
         print("Liste des manga:")
-        for i, manga in enumerate(list_to_use, start=1):
-            print(i," : ",manga.manga_name)
+        for i, (title, _) in enumerate(list_to_use, start=1):
+            print(i," : ",title)
         print("Selectionner le numéro du manga à traiter")
 
-        self.selected_manga = list_to_use[self.__ask_index(len(list_to_use))]
-        return self.selected_manga
+        _, url = list_to_use[self._ask_index(len(list_to_use))]
+        return url
 
-    def __ask_index(self, size:int)->int:
+    def _ask_index(self, size:int)->int:
         """Demande un numéro entre 1 et size à l'utilisateur et retourne l'index correspondant (base 0)."""
         while True:
             try:

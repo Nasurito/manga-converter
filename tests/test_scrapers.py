@@ -98,3 +98,27 @@ def test_get_scraper_from_domain():
     assert isinstance(get_scraper_from_domain("mangakatana"), MangakatanaScraper)
     assert get_scraper_from_domain("unknown-site") is None
     assert get_scraper_from_domain(None) is None
+
+
+def test_lelmanga_search_returns_titles_and_links(offline_pages):
+    # Les résultats de recherche utilisent le même bloc "div.bs" que la liste "Populaire" de cette page
+    offline_pages({"https://www.lelmanga.com/?s=martial+peak": "lelmanga-chapter.html"})
+    results = LelmangaScraper().search("martial peak")
+
+    assert results[0] == ("Martial Peak", "https://www.lelmanga.com/manga/martial-peak")
+    assert all(title and url.startswith("https://www.lelmanga.com/") for title, url in results)
+
+
+def test_sushiscan_close_quits_the_browser():
+    class FakeDriver:
+        quit_called = False
+        def quit(self):
+            self.quit_called = True
+
+    scraper = SushiscanScraper()
+    driver = scraper.driver = FakeDriver()
+    scraper.close()
+
+    assert driver.quit_called
+    assert scraper.driver is None
+    scraper.close()  # un second appel ne doit pas échouer

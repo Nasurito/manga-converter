@@ -3,7 +3,7 @@ import ast
 from bs4 import BeautifulSoup
 
 import utils
-from module.abstract_classes.BaseScaper import BaseScraper
+from module.abstract_classes.base_scraper import BaseScraper
 
 class MangakatanaScraper(BaseScraper):
     """Scraper pour le site mangakatana.com."""
@@ -39,9 +39,6 @@ class MangakatanaScraper(BaseScraper):
         cover_tag = soup.select_one('#single_book .cover img')
         details['cover'] = self.download_cover(cover_tag.get('src') if cover_tag else None, details['manga_name'], driver)
 
-        if driver:
-            driver.quit()
-
         # Chapitres
         chapters_data = []
         for link_tag in soup.select('.chapters table.uk-table-striped tr a[href]'):
@@ -73,13 +70,13 @@ class MangakatanaScraper(BaseScraper):
 
         return [], driver
 
-    def search(self, key_word: str) -> list[str]:
+    def search(self, key_word: str) -> list[tuple[str, str]]:
         html_page, _ = self.fetch_page(f"{self.base_url}/?search={key_word.replace(' ', '+')}&search_by=book_name")
         if not html_page:
             return []
 
         soup = BeautifulSoup(html_page, 'html.parser')
-        return [link['href'] for link in soup.select('#book_list h3.title a[href]')]
+        return [(link.text.strip(), link['href']) for link in soup.select('#book_list h3.title a[href]')]
 
     def get_language(self) -> str:
         """

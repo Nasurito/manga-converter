@@ -1,5 +1,5 @@
 from bs4 import BeautifulSoup
-from module.abstract_classes.BaseScaper import BaseScraper
+from module.abstract_classes.base_scraper import BaseScraper
 
 class SushiscanScraper(BaseScraper):
     """Scraper pour le site sushiscan.fr (ou .net)"""
@@ -47,6 +47,12 @@ class SushiscanScraper(BaseScraper):
         soup = BeautifulSoup(html_page, 'html.parser')
         # Attention : parfois les images sont en lazy loading avec data-src
         return self.parse_reader_images(soup, '#readerarea img'), self.driver
+
+    def close(self) -> None:
+        """Ferme le navigateur ouvert pour le CAPTCHA."""
+        if self.driver:
+            self.driver.quit()
+            self.driver = None
 
     def get_language(self) -> str:
         """

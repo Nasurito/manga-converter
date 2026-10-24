@@ -47,12 +47,16 @@ class BaseScraper(ABC):
         """
         pass
 
-    def search(self, key_word: str) -> list[str]:
+    def search(self, key_word: str) -> list[tuple[str, str]]:
         """
-        Retourne les URLs des mangas correspondant au mot clé.
+        Retourne les mangas correspondant au mot clé sous forme de liste (titre, url).
         Par défaut le site ne supporte pas la recherche, les sous-classes peuvent la surcharger.
         """
         return []
+
+    def close(self) -> None:
+        """Libère les ressources du scraper (ex: fermer le navigateur). Par défaut il n'y a rien à libérer."""
+        pass
 
     # Méthodes concrètes partagées par les scrapers
 
@@ -68,7 +72,7 @@ class BaseScraper(ABC):
         """Télécharge la couverture dans le dossier temporaire du manga et retourne son chemin (ou None)."""
         if not cover_url:
             return None
-        root_dir = os.path.join(tempfile.gettempdir(), manga_name)
+        root_dir = os.path.join(tempfile.gettempdir(), utils.safe_filename(manga_name))
         os.makedirs(root_dir, exist_ok=True)
         cover_path = os.path.join(root_dir, "thumb.jpg")
         return cover_path if utils.download_image(cover_url, cover_path, driver) else None

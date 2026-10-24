@@ -56,3 +56,14 @@ def test_wait_for_page_asks_user_without_selector(monkeypatch):
     utils.wait_for_page(FakeDriver(count=5))
 
     assert len(prompts) == 1
+
+
+@pytest.mark.parametrize("name, expected", [
+    ("Jujutsu Kaisen", "Jujutsu Kaisen"),
+    ("Re:Zero / Arc 1?", "Re_Zero _ Arc 1_"),
+    ('a<b>c"d|e*f\\g', "a_b_c_d_e_f_g"),
+    ("Fin avec point...", "Fin avec point"),
+    ("   ", "manga"),
+])
+def test_safe_filename(name, expected):
+    assert utils.safe_filename(name) == expected

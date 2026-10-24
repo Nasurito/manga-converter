@@ -1,6 +1,6 @@
 import argparse
 
-from module.search_engine import Search_engine
+from module.search_engine import SearchEngine
 from module.manga import Manga
 
 def parse_chapter_number(number_string: str) -> int|float:
@@ -80,6 +80,12 @@ def main():
         help="Le nom du manga à rechercher."
     )
     parser.add_argument(
+        "-o", "--output",
+        type=str,
+        default="./export",
+        help="Dossier dans lequel les fichiers sont exportés (par défaut : ./export)."
+    )
+    parser.add_argument(
         "--no-cache",
         action="store_true",
         help="Re-télécharge les images même si elles sont déjà dans le cache."
@@ -87,17 +93,27 @@ def main():
      
     args = parser.parse_args()
      
-    if args.url:
-        print(f"▶️  Chargement du manga depuis : {args.url}")
-        process_manga(Manga(args.url), use_cache=not args.no_cache)
-    elif args.search:
+    url = args.url
+    if args.search:
         print(f"🔍 Recherche de '{args.search}'...")
-        manga = Search_engine(args.search).Select_Manga()
-        if manga:
-            process_manga(manga, use_cache=not args.no_cache)
-    else:
+        url = SearchEngine(args.search).select_manga()
+        if not url:
+            return
+    elif not url:
         # Affichage de l'aide si aucune option n'est fournie
         parser.print_help()
+        return
+
+    print(f"▶️  Chargement du manga depuis : {url}")
+    try:
+        manga = Manga(url, output_dir=args.output)
+    except Exception as e:
+        print(f"❌ {e}")
+        return
+
+    # Le "with" garantit la fermeture du navigateur (CAPTCHA) à la fin, même en cas d'erreur
+    with manga:
+        process_manga(manga, use_cache=not args.no_cache)
 
 if __name__ == "__main__":
     main()

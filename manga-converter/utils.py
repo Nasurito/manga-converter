@@ -31,6 +31,14 @@ def get_domain(url:str)->str:
         return match.group(1)
     return None
 
+def safe_filename(name:str)->str:
+    """
+    Rend un nom utilisable comme nom de dossier ou de fichier sous Linux et Windows.
+    Exemple: 'Re:Zero / Arc 1?' -> 'Re_Zero _ Arc 1_'
+    """
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name).strip().rstrip('.')
+    return cleaned or "manga"
+
 def get_chrome_major_version()->int:
     """
     Retourne la version majeure du Chrome installé (ex: 144), ou None si elle n'est pas détectée.
