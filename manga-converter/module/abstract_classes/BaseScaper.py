@@ -56,9 +56,13 @@ class BaseScraper(ABC):
 
     # Méthodes concrètes partagées par les scrapers
 
-    def fetch_page(self, url: str, driver: uc.Chrome = None) -> tuple[str,uc.Chrome]:
-        """Récupère le HTML d'une page du site, avec un driver si le site l'exige."""
-        return utils.get_page(url, self.do_require_driver(), driver, referer=self.base_url)
+    def fetch_page(self, url: str, driver: uc.Chrome = None, ready_selector: str = None, min_count: int = 1) -> tuple[str,uc.Chrome]:
+        """
+        Récupère le HTML d'une page du site, avec un driver si le site l'exige.
+        Avec un driver, ready_selector/min_count indiquent quand la page est chargée (voir utils.wait_for_page).
+        """
+        return utils.get_page(url, self.do_require_driver(), driver, referer=self.base_url,
+                              ready_selector=ready_selector, min_count=min_count)
 
     def download_cover(self, cover_url: str, manga_name: str, driver: uc.Chrome = None) -> str:
         """Télécharge la couverture dans le dossier temporaire du manga et retourne son chemin (ou None)."""

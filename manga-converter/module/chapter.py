@@ -34,13 +34,19 @@ class Chapter:
         extension = format.lower()
         return os.path.join("./export", self.manga_name, extension, f"chapter_{self.id()}.{extension}")
 
-    def fetch_images(self)->bool:
+    def fetch_images(self, use_cache:bool=True)->bool:
+        """
+        Récupère les images du chapitre (avec plusieurs tentatives).
+
+        Args:
+            use_cache (bool): réutiliser les images déjà téléchargées dans le dossier temporaire si elles sont complètes
+        """
         if self.pages_path:  # Déjà fait
             return True
 
         max_retries = 5
         for attempt in range(1, max_retries + 1):
-            if self._try_fetch_images():
+            if self._try_fetch_images(use_cache):
                 return True
             if attempt < max_retries:
                 print(f"⚠️ Problème lors du téléchargement du chapitre {self.id()}, tentative {attempt}/{max_retries}. Nouvel essai...")
@@ -51,7 +57,7 @@ class Chapter:
         print(f"❌ Échec du téléchargement du chapitre {self.id()} après {max_retries} tentatives.")
         return False
 
-    def _try_fetch_images(self)->bool:
+    def _try_fetch_images(self, use_cache:bool)->bool:
         driver = None
         try:
             # Extraire les liens si pas déjà fait
@@ -68,7 +74,7 @@ class Chapter:
                 return False
 
             # Télécharger les images
-            self.pages_path = self.__download_chapter_images(driver)
+            self.pages_path = self.__download_chapter_images(driver, use_cache)
 
             if len(self.pages_path) != len(self.pages_link):
                 print(f"❌ Problème avec le téléchargement des images du chapitre {self.id()} (téléchargées: {len(self.pages_path)}, attendues: {len(self.pages_link)})")
@@ -78,26 +84,26 @@ class Chapter:
             print(f"❌ Erreur lors de la récupération des images du chapitre {self.id()}: {e}")
             return False
 
-    def download(self, format:str)->bool:
+    def download(self, format:str, use_cache:bool=True)->bool:
         """Télécharge le chapitre et le convertit au format demandé (PDF, CBZ ou CBR)."""
         if format not in CONVERTERS:
-            return self.fetch_images()  # Aucun format = téléchargement seul
+            return self.fetch_images(use_cache)  # Aucun format = téléchargement seul
 
         output_path = self.export_path(format)
         if os.path.exists(output_path):
             print(f"ℹ️  Le chapitre {self.id()} est déjà converti : {output_path}")
             return True
 
-        if not self.fetch_images():
+        if not self.fetch_images(use_cache):
             return False
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         return CONVERTERS[format](self.pages_path, output_path)
 
-    def __download_chapter_images(self,driver=None)->list[str]:
+    def __download_chapter_images(self,driver=None,use_cache:bool=True)->list[str]:
         """
         Cette méthode télécharge toutes les images d'un chapitre et les stocke dans un dossier temporaire.
-        Elle vérifie d'abord si les images existent en cache et demande à l'utilisateur s'il veut les réutiliser.
+        Si use_cache est vrai et que le cache contient toutes les images du chapitre, elles sont réutilisées.
 
         Retour:
             list: Une liste contenant les chemins des fichiers téléchargés pour chaque image du chapitre.
@@ -107,17 +113,12 @@ class Chapter:
 
         # Vérifier le cache
         cached_files = sorted(os.path.join(chapter_dir, f) for f in os.listdir(chapter_dir))
-        if cached_files and len(cached_files) == len(self.pages_link):
-            print(f"ℹ️  Le chapitre {self.id()} a été trouvé dans le cache avec {len(cached_files)} images.")
-            user_choice = input("Voulez-vous réutiliser le cache ? (O/n) : ").strip().lower()
+        if use_cache and cached_files and len(cached_files) == len(self.pages_link):
+            print(f"✅ Chapitre {self.id()} : utilisation des {len(cached_files)} images du cache.")
+            return cached_files
 
-            if user_choice != 'n':
-                print("✅ Utilisation des images du cache.")
-                return cached_files
-
-            print("🗑️ Suppression des anciennes images du cache...")
-            for file_path in cached_files:
-                os.remove(file_path)
+        for file_path in cached_files:
+            os.remove(file_path)
 
         downloaded_images = []  # Liste pour stocker les chemins locaux des images téléchargées
         for index, url in enumerate(self.pages_link, 1):

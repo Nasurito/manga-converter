@@ -56,7 +56,7 @@ class Manga:
         print("Nombre de chapitre :", min(ids, default=0) ,"-", max(ids, default=0))
         print("\n")
     
-    def download_chapters(self, chapter_start:int, chapter_end:int,format:str="CBZ")->bool:
+    def download_chapters(self, chapter_start:float, chapter_end:float,format:str="CBZ",use_cache:bool=True)->bool:
         """
         Télécharge une plage de chapitres dans le format demandé.
 
@@ -74,20 +74,20 @@ class Manga:
 
         success = True
         for chapter in chapters:
-            if chapter.download(format):
+            if chapter.download(format, use_cache):
                 print(f"Chapitre {chapter.id()}, téléchargé")
             else:
                 print(f"Erreur de téléchargement du chapitre {chapter.id()}")
                 success = False
         return success
 
-    def download(self, chapter_start:int, chapter_end:int, format:str="EPUB")->bool:
+    def download(self, chapter_start:float, chapter_end:float, format:str="EPUB", use_cache:bool=True)->bool:
         """Télécharge une plage de chapitres au format demandé (EPUB, PDF, CBZ ou CBR)."""
         if format == "EPUB":
-            return self.download_chapter_to_epub(chapter_start, chapter_end)
-        return self.download_chapters(chapter_start, chapter_end, format)
+            return self.download_chapter_to_epub(chapter_start, chapter_end, use_cache)
+        return self.download_chapters(chapter_start, chapter_end, format, use_cache)
 
-    def download_chapter_to_epub(self, start_chapter:int, end_chapter:int=None)->bool:
+    def download_chapter_to_epub(self, start_chapter:float, end_chapter:float=None, use_cache:bool=True)->bool:
 
         """
         Cette fonction permet de télécharger un ou plusieurs chapitres d'un manga et de les convertir en un seul fichier epub
@@ -129,7 +129,7 @@ class Manga:
         for chapter in chapters_to_process:
             print(f"📥 Traitement du chapitre {chapter.id()}...")
 
-            if not chapter.fetch_images():
+            if not chapter.fetch_images(use_cache):
                 print(f"❌ Échec téléchargement chapitre {chapter.id()}")
                 continue
 

@@ -6,6 +6,9 @@ import zipfile
 import requests
 import subprocess
 import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import TimeoutException
 
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -70,7 +73,28 @@ def build_session(driver:uc.Chrome=None, referer:str=None)->requests.Session:
         s.headers.update({"Referer": referer})
     return s
 
-def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,referer:str=None)->tuple[str,uc.Chrome]:
+def wait_for_page(driver:uc.Chrome, ready_selector:str=None, min_count:int=1, timeout:int=120)->None:
+    """
+    Attend que la page soit chargée, le temps que l'utilisateur résolve un éventuel CAPTCHA.
+    La page est considérée comme chargée dès qu'au moins min_count éléments correspondent à ready_selector :
+    une fois le CAPTCHA résolu, les pages suivantes se chargent donc sans intervention.
+    Si aucun sélecteur n'est donné ou que l'attente dépasse timeout secondes, l'utilisateur confirme manuellement.
+    """
+    if ready_selector:
+        print("Si un CAPTCHA apparaît, résolvez-le dans la fenêtre ouverte (attente automatique)...")
+        try:
+            WebDriverWait(driver, timeout).until(
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, ready_selector)) >= min_count
+            )
+            return
+        except TimeoutException:
+            print("⚠️ La page ne semble pas encore chargée.")
+    else:
+        print("ATTENTION : Résolvez le CAPTCHA dans la fenêtre ouverte.")
+    input("Appuyez sur Entrée ici une fois le contenu chargé...")
+
+def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,referer:str=None,
+             ready_selector:str=None,min_count:int=1)->tuple[str,uc.Chrome]:
     """
     Cette fonction permet de récupéré le contenue d'une page web sous format HTML
 
@@ -79,6 +103,8 @@ def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,re
         require_driver (bool): utiliser un navigateur (nécessaire pour les sites protégés par CAPTCHA)
         passed_driver (uc.Chrome): driver déjà ouvert à réutiliser
         referer (string): Referer à envoyer avec la requête (sans driver uniquement)
+        ready_selector (string): sélecteur CSS indiquant que la page est chargée (avec driver uniquement, voir wait_for_page)
+        min_count (int): nombre minimum d'éléments correspondant à ready_selector
 
     Returns:
         tuple: Le contenu de la page sous format HTML (ou None si une érreur s'est produite) et le driver utilisé
@@ -102,9 +128,7 @@ def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,re
         try:
             print("Chargement de la page...")
             driver.get(url_request)
-            # Pause pour vous laisser le temps de gérer le CAPTCHA manuellement
-            print("ATTENTION : Résolvez le CAPTCHA dans la fenêtre ouverte.")
-            input("Appuyez sur Entrée ici une fois le contenu chargé...")
+            wait_for_page(driver, ready_selector, min_count)
 
             # Récupération des données
             return_value = driver.page_source
@@ -201,6 +225,13 @@ def images_to_cbz(image_paths:list[str], cbz_path:str)->bool:
     print(f'Conversion en CBZ terminée : {cbz_path}')
     return True
 
-def normalize_volume(label: str) -> int:
-    m = re.search(r'\d+', label)
-    return int(m.group()) if m else None
+def normalize_volume(label: str) -> int|float:
+    """
+    Extrait le numéro de chapitre d'un texte, en gardant les demi-chapitres.
+    Exemples: '12' -> 12, '271.5' -> 271.5, '168.5 (VUS)' -> 168.5, 'Chapitre 3' -> 3
+    """
+    m = re.search(r'\d+(?:\.\d+)?', label)
+    if not m:
+        return None
+    number = float(m.group())
+    return int(number) if number.is_integer() else number

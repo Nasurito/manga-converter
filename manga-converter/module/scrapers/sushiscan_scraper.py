@@ -10,7 +10,7 @@ class SushiscanScraper(BaseScraper):
         self.driver = None
 
     def get_manga_details(self, manga_url: str) -> dict:
-        html_page, self.driver = self.fetch_page(manga_url, self.driver)
+        html_page, self.driver = self.fetch_page(manga_url, self.driver, ready_selector='#chapterlist li')
         if not html_page:
             return {}
 
@@ -39,7 +39,8 @@ class SushiscanScraper(BaseScraper):
         return details
 
     def get_chapter_images(self, chapter_url: str) -> tuple[list,object]:
-        html_page, self.driver = self.fetch_page(chapter_url, self.driver)
+        # Au moins 2 images : en mode de lecture "page par page", une seule image est affichée
+        html_page, self.driver = self.fetch_page(chapter_url, self.driver, ready_selector='#readerarea img', min_count=2)
         if not html_page:
             return [], self.driver
 
