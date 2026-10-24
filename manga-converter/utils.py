@@ -28,6 +28,26 @@ def get_domain(url:str)->str:
         return match.group(1)
     return None
 
+def get_chrome_major_version()->int:
+    """
+    Retourne la version majeure du Chrome installé (ex: 144), ou None si elle n'est pas détectée.
+    Sans cette information, undetected_chromedriver télécharge le dernier chromedriver,
+    qui peut être plus récent que le Chrome installé et refuser de se lancer.
+    """
+    candidates = [uc.find_chrome_executable(), "google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]
+    for executable in filter(None, candidates):
+        path = shutil.which(executable)
+        if not path:
+            continue
+        try:
+            output = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            continue
+        match = re.search(r'(\d+)\.\d+', output)
+        if match:
+            return int(match.group(1))
+    return None
+
 def build_session(driver:uc.Chrome=None, referer:str=None)->requests.Session:
     """
     Crée une session requests. Si un driver est fourni, la session reprend ses cookies,
@@ -75,7 +95,8 @@ def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,re
             options = uc.ChromeOptions()
             # options.add_argument('--headless') # Ne pas utiliser le mode headless (sans fenêtre) pour les CAPTCHAs !
             # Initialisation du driver "indétecté"
-            driver = uc.Chrome(options=options, version_main=144)
+            # On aligne le chromedriver sur la version du Chrome installé
+            driver = uc.Chrome(options=options, version_main=get_chrome_major_version())
             driver.set_script_timeout(120)
 
         try:
