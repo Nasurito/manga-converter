@@ -1,31 +1,10 @@
-import re
 import os
-import tempfile
-import subprocess
 from PIL import Image
 from ebooklib import epub
 
 import utils
 from module.chapter import Chapter
-# Import des scrapers concrets
-from module.scrapers.mangakatana_scraper import MangakatanaScraper
-from module.scrapers.lelmanga_scraper import LelmangaScraper
-from module.scrapers.sushiscan_scraper import SushiscanScraper
-# Les autres scrapers seront importés ici au fur et à mesure de leur création
-
-# Dictionnaire pour mapper les domaines aux classes de scraper (le "Strategy" mapping)
-SCRAPERS = {
-    "mangakatana": MangakatanaScraper,
-    "lelmanga": LelmangaScraper,
-    "sushiscan": SushiscanScraper,
-}
-
-def get_scraper_from_domain(domain):
-    """Trouve et instancie le scraper approprié pour un domaine donné."""
-    for scraper_domain, scraper_class in SCRAPERS.items():
-        if scraper_domain in domain:
-            return scraper_class()
-    return None
+from module.scrapers import get_scraper_from_domain
 
 class Manga:
     """Cette classe est utilisé pour définir un manga, un manga possede plusieurs chapitres (objet de la classe chapitre)"""
@@ -73,52 +52,42 @@ class Manga:
         print("Autheur            :",self.author)
         print("Genres             :",self.manga_genres)
         
-        higher_id = 0
-        for chapter in self.manga_chapters:
-            higher_id = chapter.id() if chapter.id() >= higher_id else higher_id
-        lower_id = higher_id
-        for chapter in self.manga_chapters:
-            lower_id = chapter.id() if chapter.id() <= lower_id else lower_id
-        print("Nombre de chapitre :", lower_id ,"-", higher_id)
+        ids = [chapter.id() for chapter in self.manga_chapters]
+        print("Nombre de chapitre :", min(ids, default=0) ,"-", max(ids, default=0))
         print("\n")
     
-    def download_chapter(self, chapter_number:int,format:str="CBZ")->bool:
-        """Télécharge un chapitre spécifique dans le bon format
-
-        Args:
-            chapter_number (float): Numéro du chapitre à télécharger.
+    def download_chapters(self, chapter_start:int, chapter_end:int,format:str="CBZ")->bool:
         """
-
-        chapter_to_download = next((chapter for chapter in self.manga_chapters if chapter.id() == chapter_number), None)
-
-        if chapter_to_download.download(format):
-            print(f"Chapitre {chapter_to_download.id()}, téléchargé")
-            return True
-        
-        print(f"Erreur de téléchargement du chapitre {chapter_to_download.id()}")
-        return False
-
-    def download_chapters(self, chapter_start:int, chapter_end:int,format:str="CBZ")->None:
-        """
-        Télécharge une plage de chapitres.
+        Télécharge une plage de chapitres dans le format demandé.
 
         Args:
             chapter_start (float): Numéro du premier chapitre à télécharger (inclus).
             chapter_end (float): Numéro du dernier chapitre à télécharger (inclus).
+
+        Returns:
+            bool: True si tous les chapitres ont été téléchargés.
         """
+        chapters = sorted((c for c in self.manga_chapters if chapter_start <= c.id() <= chapter_end), key=lambda c: c.id())
+        if not chapters:
+            print(f"❌ Aucun chapitre entre {chapter_start} et {chapter_end} pour ce manga sur le site {self.domain_name}")
+            return False
 
-        # Si un seul chapitre est demandé, appeler la fonction correspondante
-        if chapter_start == chapter_end:
-            return self.download_chapter(chapter_start,format)
+        success = True
+        for chapter in chapters:
+            if chapter.download(format):
+                print(f"Chapitre {chapter.id()}, téléchargé")
+            else:
+                print(f"Erreur de téléchargement du chapitre {chapter.id()}")
+                success = False
+        return success
 
-        # Correction si l'utilisateur a inversé les bornes
-        start, end = min(chapter_start, chapter_end), max(chapter_start, chapter_end)
+    def download(self, chapter_start:int, chapter_end:int, format:str="EPUB")->bool:
+        """Télécharge une plage de chapitres au format demandé (EPUB, PDF, CBZ ou CBR)."""
+        if format == "EPUB":
+            return self.download_chapter_to_epub(chapter_start, chapter_end)
+        return self.download_chapters(chapter_start, chapter_end, format)
 
-        # Filtrer les chapitres à télécharger et les télécharger directement
-        for chapter in filter(lambda c: start <= c.id() <= end, self.manga_chapters):
-            self.download_chapter(chapter.id(),format)
-
-    def download_chapter_to_epub(self, start_chapter:int, end_chapter:int, output_path:str=None)->bool:
+    def download_chapter_to_epub(self, start_chapter:int, end_chapter:int=None)->bool:
 
         """
         Cette fonction permet de télécharger un ou plusieurs chapitres d'un manga et de les convertir en un seul fichier epub
@@ -143,12 +112,12 @@ class Manga:
 
         book.set_identifier(self.manga_name)
         book.set_title(self.manga_name)
-        book.set_language(self.scraper.get_language())
+        language = self.scraper.get_language()
+        book.set_language(language)
         book.add_author(self.author)
 
-        cover_path = os.path.join(tempfile.gettempdir(), self.manga_name, "thumb.jpg")
-        if os.path.exists(cover_path):
-            with open(cover_path, "rb") as f:
+        if self.cover and os.path.exists(self.cover):
+            with open(self.cover, "rb") as f:
                 book.set_cover("cover.jpg", f.read())
 
         spine = ['nav']
@@ -160,10 +129,9 @@ class Manga:
         for chapter in chapters_to_process:
             print(f"📥 Traitement du chapitre {chapter.id()}...")
 
-            if not chapter.pages_path:
-                if not chapter.fetch_images():
-                    print(f"❌ Échec téléchargement chapitre {chapter.id()}")
-                    continue
+            if not chapter.fetch_images():
+                print(f"❌ Échec téléchargement chapitre {chapter.id()}")
+                continue
 
             first_page_file = None
 
@@ -190,11 +158,11 @@ class Manga:
                     uid=f"chap_{chapter.id()}_page_{i}",
                     title=None,
                     file_name=f"chapter_{chapter.id()}_page_{i}.xhtml",
-                    lang="fr"
+                    lang=language
                 )
 
                 page.set_content(f"""<!DOCTYPE html>
-    <html lang="fr" dir="rtl">
+    <html lang="{language}" dir="rtl">
     <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0"/>

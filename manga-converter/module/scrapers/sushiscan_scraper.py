@@ -1,8 +1,4 @@
-import os
-import tempfile
-import re
 from bs4 import BeautifulSoup
-import utils
 from module.abstract_classes.BaseScaper import BaseScraper
 
 class SushiscanScraper(BaseScraper):
@@ -10,14 +6,13 @@ class SushiscanScraper(BaseScraper):
 
     def __init__(self):
         super().__init__("https://sushiscan.fr")
-        self.driver=None
+        # Le driver est conservé pour ne résoudre le CAPTCHA qu'une seule fois
+        self.driver = None
 
     def get_manga_details(self, manga_url: str) -> dict:
-        html_page, driver = utils.get_page(manga_url,self.do_require_driver())
+        html_page, self.driver = self.fetch_page(manga_url, self.driver)
         if not html_page:
             return {}
-        
-        self.driver = driver
 
         soup = BeautifulSoup(html_page, 'html.parser')
         details = {}
@@ -29,79 +24,37 @@ class SushiscanScraper(BaseScraper):
         # Auteur
         # Sushiscan utilise souvent un tableau ou des listes pour les infos
         author_row = soup.find(lambda tag: tag.name == "td" and "Auteur" in tag.text)
-        if author_row:
-            next_td = author_row.find_next_sibling('td')
-            details['author'] = next_td.text.strip() if next_td else "Inconnu"
-        else:
-            details['author'] = "Inconnu"
+        next_td = author_row.find_next_sibling('td') if author_row else None
+        details['author'] = next_td.text.strip() if next_td else "Inconnu"
 
         # Genres
-        genres_tags = soup.select('.seriestugenre a')
-        details['manga_genres'] = [tag.text.strip() for tag in genres_tags]
+        details['manga_genres'] = [tag.text.strip() for tag in soup.select('.seriestugenre a')]
 
         # Couverture
         cover_tag = soup.select_one('.thumb img')
-        if cover_tag and 'src' in cover_tag.attrs:
-            cover_url = cover_tag['src']
-            root_dir = os.path.join(tempfile.gettempdir(), details['manga_name'])
-            os.makedirs(root_dir, exist_ok=True)
-            cover_path = os.path.join(root_dir, "thumb.jpg")
-            utils.download_image(cover_url, cover_path,self.do_require_driver(),self.driver)
-            details['cover'] = cover_path
-        else:
-            details['cover'] = None
-            
+        details['cover'] = self.download_cover(cover_tag.get('src') if cover_tag else None, details['manga_name'], self.driver)
+
         # Chapitres
-        chapters_data = []
-        # Souvent dans une liste avec id #chapterlist
-        chapter_links = soup.select('#chapterlist li')
-        
-        for li in chapter_links:
-            link_tag = li.select_one('a')
-            num_attr = li.get('data-num')
-            
-            if link_tag and 'href' in link_tag.attrs:
-                if not num_attr:
-                    # Fallback regex sur le texte ou le lien
-                    match = re.search(r'chapter-([\d\.]+)', link_tag['href'])
-                    num_attr = match.group(1) if match else "0"
-
-                chapters_data.append({
-                    "id": utils.normalize_volume(num_attr),
-                    "link": link_tag['href']
-                })
-
-        details['chapters_data'] = chapters_data
+        details['chapters_data'] = self.parse_chapterlist(soup, r'chapter-([\d\.]+)', fallback_on_href=True)
         return details
 
-    def get_chapter_images(self, chapter_url: str) -> list:
-        html_page, driver = utils.get_page(chapter_url,self.do_require_driver(),self.driver)
+    def get_chapter_images(self, chapter_url: str) -> tuple[list,object]:
+        html_page, self.driver = self.fetch_page(chapter_url, self.driver)
         if not html_page:
-            return [],None
+            return [], self.driver
 
         soup = BeautifulSoup(html_page, 'html.parser')
-        images = []
-
-        # Sushiscan met souvent les images dans #readerarea
         # Attention : parfois les images sont en lazy loading avec data-src
-        img_tags = soup.select('#readerarea img')
-        
-        for img in img_tags:
-            src = img.get('data-src') or img.get('src')
-            if src:
-                images.append(src.strip())
-        
-        return images,driver
-    
+        return self.parse_reader_images(soup, '#readerarea img'), self.driver
+
     def get_language(self) -> str:
         """
         Permet de retourner la langues des mangas du site Sushiscan.
-        
-        :param self: Description
+
         :return: 'fr' ou 'en' en fonction de la langue du site
         :rtype: str
         """
         return "fr"
-    
+
     def do_require_driver(self) -> bool:
         return True

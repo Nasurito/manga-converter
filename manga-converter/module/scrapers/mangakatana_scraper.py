@@ -1,7 +1,5 @@
 import re
-import json
-import os
-import tempfile
+import ast
 from bs4 import BeautifulSoup
 
 import utils
@@ -18,7 +16,7 @@ class MangakatanaScraper(BaseScraper):
         Récupère les détails d'un manga depuis sa page URL.
         Utilise BeautifulSoup pour un parsing plus robuste.
         """
-        html_page, driver = utils.get_page(manga_url,self.do_require_driver())
+        html_page, driver = self.fetch_page(manga_url)
         if not html_page:
             print(f"❌ Impossible de récupérer la page pour {manga_url}")
             return {}
@@ -35,76 +33,62 @@ class MangakatanaScraper(BaseScraper):
         details['author'] = author_tag.text.strip() if author_tag else "Auteur inconnu"
 
         # Genres
-        genres_tags = soup.select('.info .genres a')
-        details['manga_genres'] = [tag.text.strip() for tag in genres_tags]
+        details['manga_genres'] = [tag.text.strip() for tag in soup.select('.info .genres a')]
 
         # Couverture
         cover_tag = soup.select_one('#single_book .cover img')
-        if cover_tag and 'src' in cover_tag.attrs:
-            cover_url = cover_tag['src']
-            root_dir = os.path.join(tempfile.gettempdir(), details['manga_name'])
-            os.makedirs(root_dir, exist_ok=True)
-            cover_path = os.path.join(root_dir, "thumb.jpg")
-            utils.download_image(cover_url, cover_path,self.do_require_driver(),driver)
-            details['cover'] = cover_path
-        else:
-            details['cover'] = None
+        details['cover'] = self.download_cover(cover_tag.get('src') if cover_tag else None, details['manga_name'], driver)
 
         if driver:
             driver.quit()
 
         # Chapitres
         chapters_data = []
-        chapters_table = soup.select_one('.chapters table.uk-table-striped')
-        if chapters_table:
-            for row in chapters_table.find_all('tr'):
-                link_tag = row.find('a')
-                if link_tag and 'href' in link_tag.attrs:
-                    chapter_link = link_tag['href']
-                    match = re.search(r'Chapter\s*([\d\.]+)', link_tag.text)
-                    if match:
-                        chapter_num_str = match.group(1)
-                        chapters_data.append({
-                            "id": utils.normalize_volume(chapter_num_str),
-                            "link": chapter_link
-                        })
-        
+        for link_tag in soup.select('.chapters table.uk-table-striped tr a[href]'):
+            match = re.search(r'Chapter\s*([\d\.]+)', link_tag.text)
+            if match:
+                chapters_data.append({
+                    "id": utils.normalize_volume(match.group(1)),
+                    "link": link_tag['href']
+                })
+
         details['chapters_data'] = chapters_data
         return details
 
-    def get_chapter_images(self, chapter_url: str) -> list[str]:
+    def get_chapter_images(self, chapter_url: str) -> tuple[list,None]:
         """
         Récupère la liste des URLs des images pour un chapitre donné.
         """
-        html_page, driver = utils.get_page(chapter_url,self.do_require_driver())
+        html_page, driver = self.fetch_page(chapter_url)
+        if not html_page:
+            return [], driver
+
+        # Les liens des pages sont stockés dans la variable JavaScript 'thzq'
+        match = re.search(r"var\s+thzq\s*=\s*(\[[^\]]+\])", html_page, re.DOTALL)
+        if match:
+            try:
+                return ast.literal_eval(match.group(1)), driver
+            except (ValueError, SyntaxError):
+                print(f"❌ Erreur de parsing pour les images de {chapter_url}")
+
+        return [], driver
+
+    def search(self, key_word: str) -> list[str]:
+        html_page, _ = self.fetch_page(f"{self.base_url}/?search={key_word.replace(' ', '+')}&search_by=book_name")
         if not html_page:
             return []
 
-        # Définir le modèle d'expression régulière pour rechercher la variable JavaScript contenant les liens des pages
-        pattern = r"var\s+thzq\s*=\s*(\[[^\]]+\])"
-        
-        # Rechercher la correspondance dans la page HTML du chapitre
-        match = re.search(pattern, html_page, re.DOTALL)
-        
-        if match:
-            try:
-                image_urls = eval(match.group(1))
-                return image_urls,driver
-            except json.JSONDecodeError:
-                print(f"❌ Erreur de parsing JSON pour les images de {chapter_url}")
-                return [],driver
-        
-        return [] ,driver 
-    
+        soup = BeautifulSoup(html_page, 'html.parser')
+        return [link['href'] for link in soup.select('#book_list h3.title a[href]')]
+
     def get_language(self) -> str:
         """
         Permet de retourner la langues des mangas du site mangakatana.
-        
-        :param self: Description
+
         :return: 'fr' ou 'en' en fonction de la langue du site
         :rtype: str
         """
         return "en"
-    
+
     def do_require_driver(self) -> bool:
         return False
