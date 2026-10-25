@@ -44,8 +44,12 @@ class LelmangaScraper(BaseScraper):
         if not html_page:
             return [], driver
 
-        soup = BeautifulSoup(html_page, 'html.parser')
-        return self.parse_reader_images(soup, '.readerarea img, #readerarea img'), driver
+        # Liste complète déclarée par le lecteur, sinon les images présentes dans la page
+        images = self.parse_ts_reader(html_page)
+        if not images:
+            soup = BeautifulSoup(html_page, 'html.parser')
+            images = self.parse_reader_images(soup, '.readerarea img, #readerarea img')
+        return images, driver
 
     def search(self, key_word: str) -> list[tuple[str, str]]:
         html_page, _ = self.fetch_page(f"{self.base_url}/?s={key_word.replace(' ', '+')}")

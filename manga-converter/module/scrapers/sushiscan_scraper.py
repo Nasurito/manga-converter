@@ -4,10 +4,10 @@ from selenium.webdriver.support.ui import Select
 from module.abstract_classes.base_scraper import BaseScraper
 
 class SushiscanScraper(BaseScraper):
-    """Scraper pour le site sushiscan.fr (ou .net)"""
+    """Scraper pour le site sushiscan.net (anciennement sushiscan.fr)"""
 
     def __init__(self):
-        super().__init__("https://sushiscan.fr")
+        super().__init__("https://sushiscan.net")
         # Le driver est conservé pour ne résoudre le CAPTCHA qu'une seule fois
         self.driver = None
 
@@ -48,9 +48,13 @@ class SushiscanScraper(BaseScraper):
         if not html_page:
             return [], self.driver
 
-        soup = BeautifulSoup(html_page, 'html.parser')
-        # Attention : parfois les images sont en lazy loading avec data-src
-        return self.parse_reader_images(soup, '#readerarea img'), self.driver
+        # Liste complète déclarée par le lecteur (indépendante du mode de lecture),
+        # sinon les images affichées (attention : parfois en lazy loading avec data-src)
+        images = self.parse_ts_reader(html_page)
+        if not images:
+            soup = BeautifulSoup(html_page, 'html.parser')
+            images = self.parse_reader_images(soup, '#readerarea img')
+        return images, self.driver
 
     @staticmethod
     def use_vertical_reading(driver) -> None:

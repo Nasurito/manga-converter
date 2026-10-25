@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import tempfile
 from abc import ABC, abstractmethod
 import undetected_chromedriver as uc
@@ -102,6 +103,25 @@ class BaseScraper(ABC):
                 "link": link_tag['href']
             })
         return chapters_data
+
+    def parse_ts_reader(self, html_page: str) -> list[str]:
+        """
+        Retourne les images déclarées dans le script 'ts_reader.run({...})' du thème MangaReader.
+        Cette liste est complète quel que soit le mode de lecture, contrairement aux images
+        affichées dans le lecteur (une seule en mode "Lecture par Page").
+        """
+        match = re.search(r'ts_reader\.run\((\{.*?\})\);', html_page, re.DOTALL)
+        if not match:
+            return []
+        try:
+            data = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            return []
+
+        # Le serveur par défaut s'il existe, sinon le premier disponible
+        sources = data.get('sources') or [{}]
+        source = next((s for s in sources if s.get('source') == data.get('defaultSource')), sources[0])
+        return [url.strip() for url in source.get('images', []) if url and url.strip()]
 
     def parse_reader_images(self, soup, selector: str) -> list[str]:
         """Retourne les URLs des images du lecteur (gère le lazy loading via 'data-src')."""

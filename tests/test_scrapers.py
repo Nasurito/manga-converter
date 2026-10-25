@@ -122,3 +122,57 @@ def test_sushiscan_close_quits_the_browser():
     assert driver.quit_called
     assert scraper.driver is None
     scraper.close()  # un second appel ne doit pas échouer
+
+
+def test_sushiscan_manga_details(offline_pages):
+    offline_pages({"manga": "sushiscan-manga.html"})
+    details = SushiscanScraper().get_manga_details("manga")
+
+    assert details["manga_name"] == "Assassination Classroom"
+    assert details["author"] == "Matsui Yusei"
+    assert details["manga_genres"] == ["Action", "Comédie", "School-Life", "Science-Fiction"]
+    # Sushiscan numérote en volumes ("Volume 21")
+    assert chapter_ids(details) == list(range(21, 0, -1))
+    assert details["chapters_data"][-1]["link"] == "https://sushiscan.net/assassination-classroom-volume-1/"
+
+
+def test_sushiscan_chapter_images_do_not_depend_on_reading_mode(offline_pages):
+    # La page enregistrée est en "Lecture par Page" et le lecteur n'a encore affiché aucune image :
+    # la liste complète vient du script ts_reader
+    offline_pages({"chapter": "sushiscan-chapitre.html"})
+    images, _ = SushiscanScraper().get_chapter_images("chapter")
+
+    assert len(images) == 183
+    assert images[0] == "https://c1.sushiscan.net/wp-content/uploads4/AssassinationClassroomTome1-001.jpg"
+    assert images[-1] == "https://c1.sushiscan.net/wp-content/uploads4/AssassinationClassroomTome1-183.jpg"
+
+
+def ts_reader_page(data: str) -> str:
+    return f"<html><body><div id='readerarea'></div><script>ts_reader.run({data});</script></body></html>"
+
+
+def test_ts_reader_uses_default_source_or_first_one():
+    scraper = SushiscanScraper()
+    two_sources = '{"defaultSource": "S2", "sources": [{"source": "S1", "images": ["a1"]}, {"source": "S2", "images": ["b1", " b2 "]}]}'
+    unknown_default = '{"defaultSource": "Server 1", "sources": [{"source": "Server 2", "images": ["c1"]}]}'
+
+    assert scraper.parse_ts_reader(ts_reader_page(two_sources)) == ["b1", "b2"]
+    assert scraper.parse_ts_reader(ts_reader_page(unknown_default)) == ["c1"]  # cas réel de lelmanga
+
+
+def test_ts_reader_missing_or_invalid():
+    scraper = SushiscanScraper()
+
+    assert scraper.parse_ts_reader("<html>pas de lecteur</html>") == []
+    assert scraper.parse_ts_reader(ts_reader_page("{pas du json}")) == []
+    assert scraper.parse_ts_reader(ts_reader_page('{"sources": []}')) == []
+
+
+def test_sushiscan_falls_back_to_displayed_images(monkeypatch):
+    import utils
+    page = "<div id='readerarea'><img src='https://img/1.jpg'><img data-src='https://img/2.jpg'></div>"
+    monkeypatch.setattr(utils, "get_page", lambda *a, **k: (page, None))
+
+    images, _ = SushiscanScraper().get_chapter_images("chapter")
+
+    assert images == ["https://img/1.jpg", "https://img/2.jpg"]

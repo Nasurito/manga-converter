@@ -1,3 +1,4 @@
+import io
 import os
 from PIL import Image
 from ebooklib import epub
@@ -5,6 +6,26 @@ from ebooklib import epub
 import utils
 from module.chapter import Chapter
 from module.scrapers import get_scraper_from_domain
+
+def epub_image_content(img_path:str)->bytes:
+    """
+    Prépare une page pour l'EPUB et retourne son contenu JPEG : les pages en paysage sont tournées
+    pour tenir sur l'écran. Tout se fait en mémoire, l'image du cache n'est pas modifiée
+    (elle sert aussi aux exports CBZ/CBR/PDF).
+    """
+    with Image.open(img_path) as img:
+        if img.format == 'JPEG' and img.width <= img.height and img.mode in ['RGB', 'L']:
+            # Rien à changer : on garde le fichier d'origine, sans le recompresser
+            with open(img_path, "rb") as f:
+                return f.read()
+
+        if img.width > img.height:
+            img = img.rotate(90, expand=True)
+        if img.mode not in ['RGB', 'L']:
+            img = img.convert('RGB')
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG')
+        return buffer.getvalue()
 
 class Manga:
     """Cette classe est utilisé pour définir un manga, un manga possede plusieurs chapitres (objet de la classe chapitre)"""
@@ -155,21 +176,13 @@ class Manga:
             for i, img_path in enumerate(chapter.pages_path, 1):
                 img_name = os.path.basename(img_path)
 
-                with Image.open(img_path) as img:
-                    if img.width > img.height:
-                        img = img.rotate(90, expand=True)
-                    if img.mode not in ['RGB', 'L']:
-                        img = img.convert('RGB')
-                    img.save(img_path)
-
-                with open(img_path, "rb") as img_file:
-                    img_item = epub.EpubItem(
-                        uid=f"img_{chapter.id()}_{i}",
-                        file_name=f"images/chapter_{chapter.id()}/{img_name}",
-                        media_type="image/jpeg",
-                        content=img_file.read()
-                    )
-                    book.add_item(img_item)
+                img_item = epub.EpubItem(
+                    uid=f"img_{chapter.id()}_{i}",
+                    file_name=f"images/chapter_{chapter.id()}/{img_name}",
+                    media_type="image/jpeg",
+                    content=epub_image_content(img_path)
+                )
+                book.add_item(img_item)
 
                 page = epub.EpubHtml(
                     uid=f"chap_{chapter.id()}_page_{i}",
