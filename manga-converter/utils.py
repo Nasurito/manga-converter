@@ -8,7 +8,8 @@ import subprocess
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException
+from typing import Callable
 
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -81,19 +82,29 @@ def build_session(driver:uc.Chrome=None, referer:str=None)->requests.Session:
         s.headers.update({"Referer": referer})
     return s
 
-def wait_for_page(driver:uc.Chrome, ready_selector:str=None, min_count:int=1, timeout:int=120)->None:
+def wait_for_page(driver:uc.Chrome, ready_selector:str=None, min_count:int=1, timeout:int=120,
+                  prepare_page:Callable[[uc.Chrome], None]=None)->None:
     """
     Attend que la page soit chargée, le temps que l'utilisateur résolve un éventuel CAPTCHA.
     La page est considérée comme chargée dès qu'au moins min_count éléments correspondent à ready_selector :
     une fois le CAPTCHA résolu, les pages suivantes se chargent donc sans intervention.
     Si aucun sélecteur n'est donné ou que l'attente dépasse timeout secondes, l'utilisateur confirme manuellement.
+
+    prepare_page (optionnel) est appelé à chaque vérification, avant de compter les éléments : il permet
+    d'agir sur la page dès qu'elle est disponible (ex: changer le mode de lecture une fois le CAPTCHA passé).
     """
+    def is_ready(d):
+        if prepare_page:
+            try:
+                prepare_page(d)
+            except WebDriverException:
+                pass  # page encore en cours de chargement : on réessaiera à la prochaine vérification
+        return len(d.find_elements(By.CSS_SELECTOR, ready_selector)) >= min_count
+
     if ready_selector:
         print("Si un CAPTCHA apparaît, résolvez-le dans la fenêtre ouverte (attente automatique)...")
         try:
-            WebDriverWait(driver, timeout).until(
-                lambda d: len(d.find_elements(By.CSS_SELECTOR, ready_selector)) >= min_count
-            )
+            WebDriverWait(driver, timeout).until(is_ready)
             return
         except TimeoutException:
             print("⚠️ La page ne semble pas encore chargée.")
@@ -102,7 +113,8 @@ def wait_for_page(driver:uc.Chrome, ready_selector:str=None, min_count:int=1, ti
     input("Appuyez sur Entrée ici une fois le contenu chargé...")
 
 def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,referer:str=None,
-             ready_selector:str=None,min_count:int=1)->tuple[str,uc.Chrome]:
+             ready_selector:str=None,min_count:int=1,
+             prepare_page:Callable[[uc.Chrome], None]=None)->tuple[str,uc.Chrome]:
     """
     Cette fonction permet de récupéré le contenue d'une page web sous format HTML
 
@@ -113,6 +125,7 @@ def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,re
         referer (string): Referer à envoyer avec la requête (sans driver uniquement)
         ready_selector (string): sélecteur CSS indiquant que la page est chargée (avec driver uniquement, voir wait_for_page)
         min_count (int): nombre minimum d'éléments correspondant à ready_selector
+        prepare_page (callable): action à effectuer sur la page pendant l'attente (voir wait_for_page)
 
     Returns:
         tuple: Le contenu de la page sous format HTML (ou None si une érreur s'est produite) et le driver utilisé
@@ -136,7 +149,7 @@ def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,re
         try:
             print("Chargement de la page...")
             driver.get(url_request)
-            wait_for_page(driver, ready_selector, min_count)
+            wait_for_page(driver, ready_selector, min_count, prepare_page=prepare_page)
 
             # Récupération des données
             return_value = driver.page_source

@@ -67,3 +67,30 @@ def test_wait_for_page_asks_user_without_selector(monkeypatch):
 ])
 def test_safe_filename(name, expected):
     assert utils.safe_filename(name) == expected
+
+
+def test_wait_for_page_runs_prepare_page_until_ready(no_prompt):
+    # prepare_page simule le passage en lecture verticale : la page affiche alors toutes les images
+    driver = FakeDriver(count=1)
+    calls = []
+    def prepare(d):
+        calls.append(d)
+        d.count = 5
+
+    utils.wait_for_page(driver, "#readerarea img", min_count=2, timeout=1, prepare_page=prepare)
+
+    assert calls == [driver]
+
+
+def test_wait_for_page_ignores_errors_while_page_is_loading(no_prompt):
+    from selenium.common.exceptions import StaleElementReferenceException
+    attempts = []
+    def prepare(d):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise StaleElementReferenceException("page en cours de rendu")
+        d.count = 5
+
+    utils.wait_for_page(FakeDriver(count=0), "#readerarea img", min_count=2, timeout=5, prepare_page=prepare)
+
+    assert len(attempts) == 2

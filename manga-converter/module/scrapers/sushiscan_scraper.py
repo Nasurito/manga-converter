@@ -1,4 +1,6 @@
 from bs4 import BeautifulSoup
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select
 from module.abstract_classes.base_scraper import BaseScraper
 
 class SushiscanScraper(BaseScraper):
@@ -39,14 +41,27 @@ class SushiscanScraper(BaseScraper):
         return details
 
     def get_chapter_images(self, chapter_url: str) -> tuple[list,object]:
-        # Au moins 2 images : en mode de lecture "page par page", une seule image est affichée
-        html_page, self.driver = self.fetch_page(chapter_url, self.driver, ready_selector='#readerarea img', min_count=2)
+        # Au moins 2 images : en mode "Lecture par Page" une seule image est affichée,
+        # le lecteur est donc passé en "Lecture Verticale" dès que la page est disponible
+        html_page, self.driver = self.fetch_page(chapter_url, self.driver, ready_selector='#readerarea img', min_count=2,
+                                                 prepare_page=self.use_vertical_reading)
         if not html_page:
             return [], self.driver
 
         soup = BeautifulSoup(html_page, 'html.parser')
         # Attention : parfois les images sont en lazy loading avec data-src
         return self.parse_reader_images(soup, '#readerarea img'), self.driver
+
+    @staticmethod
+    def use_vertical_reading(driver) -> None:
+        """
+        Passe le lecteur de "Lecture par Page" à "Lecture Verticale" pour que toutes les images
+        du chapitre soient dans la page. Le site mémorise ce choix pour les chapitres suivants.
+        """
+        reading_modes = driver.find_elements(By.CSS_SELECTOR, 'select#readingmode')
+        if reading_modes and reading_modes[0].get_attribute('value') != 'full':
+            print("ℹ️  Passage du lecteur en mode « Lecture Verticale »")
+            Select(reading_modes[0]).select_by_value('full')
 
     def close(self) -> None:
         """Ferme le navigateur ouvert pour le CAPTCHA."""
