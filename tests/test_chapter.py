@@ -29,7 +29,7 @@ def workspace(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     downloads = []
-    def fake_download(url, path, driver=None):
+    def fake_download(url, path, driver=None, **kwargs):
         downloads.append(url)
         with open(path, "wb") as f:
             f.write(url.encode())
@@ -89,3 +89,54 @@ def test_unsafe_manga_name_is_cleaned_in_paths(workspace, no_prompt):
     assert chapter.export_path("CBZ") == os.path.join("mes_mangas", "Re_Zero _ Arc 1_", "cbz", "chapter_1.cbz")
     assert chapter.download("CBZ") is True
     assert os.path.exists(chapter.export_path("CBZ"))
+
+
+class ManyPagesScraper(FakeScraper):
+    def get_chapter_images(self, chapter_url):
+        self.calls += 1
+        return [f"https://img/{i}.jpg" for i in range(1, 21)], "driver"
+
+
+def test_one_session_for_the_whole_chapter_and_pages_stay_in_order(workspace, monkeypatch, no_prompt):
+    import random, time
+    sessions = []
+    def fake_build_session(driver=None, referer=None):
+        sessions.append(driver)
+        return "session"
+    monkeypatch.setattr(utils, "build_session", fake_build_session)
+
+    received = []
+    def fake_download(url, path, session=None, **kwargs):
+        received.append(session)
+        time.sleep(random.uniform(0, 0.01))  # les téléchargements parallèles finissent dans le désordre
+        with open(path, "w") as f:
+            f.write(url)
+        return True
+    monkeypatch.setattr(utils, "download_image", fake_download)
+
+    chapter = Chapter(1, "Manga", "x", ManyPagesScraper())
+    assert chapter.fetch_images() is True
+
+    assert sessions == ["driver"]  # cookies du navigateur copiés une seule fois
+    assert set(received) == {"session"}
+    assert [open(p).read() for p in chapter.pages_path] == [f"https://img/{i}.jpg" for i in range(1, 21)]
+
+
+def test_failed_image_makes_the_chapter_retry(workspace, monkeypatch, no_prompt):
+    monkeypatch.setattr("module.chapter.DOWNLOAD_ATTEMPTS", 1)
+    failures = {"https://img/2.jpg"}
+    def fake_download(url, path, **kwargs):
+        if url in failures:
+            failures.clear()  # échoue une seule fois
+            return False
+        with open(path, "w") as f:
+            f.write(url)
+        return True
+    monkeypatch.setattr(utils, "download_image", fake_download)
+
+    scraper = FakeScraper()
+    chapter = Chapter(1, "Manga", "x", scraper)
+
+    assert chapter.fetch_images() is True
+    assert scraper.calls == 2
+    assert len(chapter.pages_path) == 3

@@ -94,3 +94,38 @@ def test_wait_for_page_ignores_errors_while_page_is_loading(no_prompt):
     utils.wait_for_page(FakeDriver(count=0), "#readerarea img", min_count=2, timeout=5, prepare_page=prepare)
 
     assert len(attempts) == 2
+
+
+class FakeResponse:
+    content = b"image"
+    def raise_for_status(self):
+        pass
+
+
+class FlakySession:
+    """Session qui échoue les `failures` premières fois."""
+    def __init__(self, failures):
+        self.failures, self.calls = failures, 0
+
+    def get(self, url, timeout):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise ConnectionError("coupure réseau")
+        return FakeResponse()
+
+
+def test_download_image_retries_then_succeeds(tmp_path, monkeypatch):
+    monkeypatch.setattr(utils.time, "sleep", lambda seconds: None)
+    session = FlakySession(failures=2)
+
+    assert utils.download_image("https://img/1.jpg", str(tmp_path / "1.jpg"), session=session, attempts=3)
+    assert session.calls == 3
+    assert (tmp_path / "1.jpg").read_bytes() == b"image"
+
+
+def test_download_image_gives_up_after_all_attempts(tmp_path, monkeypatch):
+    monkeypatch.setattr(utils.time, "sleep", lambda seconds: None)
+    session = FlakySession(failures=5)
+
+    assert not utils.download_image("https://img/1.jpg", str(tmp_path / "1.jpg"), session=session, attempts=3)
+    assert session.calls == 3

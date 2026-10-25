@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import shutil
 import img2pdf
 import zipfile
@@ -173,24 +174,30 @@ def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,re
 
     return return_value,driver # Retourner le resultat de la requete
 
-def download_image(url:str, filename:str, driver:uc.Chrome=None)->bool:
+def download_image(url:str, filename:str, driver:uc.Chrome=None, session:requests.Session=None, attempts:int=1)->bool:
     """
     Cette fonction est utilisée pour télécharger une image à partir de son url
     Args:
         url (lien): le lien de l'image à télécharger
         filename (string): chemin du fichier et nom du fichier telecharger
         driver (uc.Chrome): si fourni, sa session (cookies, User-Agent) est utilisée pour la requête
+        session (requests.Session): session à réutiliser (voir build_session), plus rapide pour plusieurs images
+        attempts (int): nombre d'essais avant d'abandonner
     """
-    try:
-        response = build_session(driver).get(url, timeout=30)
-        response.raise_for_status()  # Vérifie si la requête a réussi
+    session = session or build_session(driver)
+    for attempt in range(1, attempts + 1):
+        try:
+            response = session.get(url, timeout=30)
+            response.raise_for_status()  # Vérifie si la requête a réussi
 
-        with open(filename, "wb") as file:  # Ouvrir en mode binaire
-            file.write(response.content)  # Écrire le contenu brut de l'image
-        return True
-    except Exception as error:
-        print("Erreur lors du téléchargement :", error)
-        return False
+            with open(filename, "wb") as file:  # Ouvrir en mode binaire
+                file.write(response.content)  # Écrire le contenu brut de l'image
+            return True
+        except Exception as error:
+            if attempt == attempts:
+                print("Erreur lors du téléchargement :", error)
+                return False
+            time.sleep(attempt)  # petite pause avant de réessayer (1s, 2s, ...)
 
 def images_to_pdf(img_list:list[str], output_pdf:str)->bool:
     """

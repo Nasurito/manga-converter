@@ -1,7 +1,13 @@
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 import utils
 from module.abstract_classes.base_scraper import BaseScraper
+
+# Nombre d'images téléchargées en même temps : assez pour aller vite, assez peu pour ne pas être bloqué par le site
+PARALLEL_DOWNLOADS = 4
+# Nombre d'essais par image avant de considérer le téléchargement du chapitre comme raté
+DOWNLOAD_ATTEMPTS = 3
 
 # Fonction de conversion associée à chaque format de sortie (l'extension du fichier est le format en minuscule)
 CONVERTERS = {
@@ -123,10 +129,17 @@ class Chapter:
         for file_path in cached_files:
             os.remove(file_path)
 
-        downloaded_images = []  # Liste pour stocker les chemins locaux des images téléchargées
-        for index, url in enumerate(self.pages_link, 1):
-            image_path = os.path.join(chapter_dir, f"{index:03d}.jpg")
-            if utils.download_image(url, image_path, driver):
-                downloaded_images.append(image_path)
+        # Une seule session pour tout le chapitre : les cookies du navigateur (CAPTCHA) ne sont copiés
+        # qu'une fois et la connexion au serveur d'images est réutilisée d'une image à l'autre
+        session = utils.build_session(driver)
+        image_paths = [os.path.join(chapter_dir, f"{index:03d}.jpg") for index in range(1, len(self.pages_link) + 1)]
 
-        return downloaded_images
+        def download(url, image_path):
+            return utils.download_image(url, image_path, session=session, attempts=DOWNLOAD_ATTEMPTS)
+
+        print(f"📥 Chapitre {self.id()} : téléchargement de {len(self.pages_link)} images...")
+        with ThreadPoolExecutor(max_workers=PARALLEL_DOWNLOADS) as executor:
+            results = list(executor.map(download, self.pages_link, image_paths))
+
+        # Chemins des images téléchargées, dans l'ordre des pages
+        return [path for path, success in zip(image_paths, results) if success]
