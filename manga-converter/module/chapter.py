@@ -18,30 +18,29 @@ CONVERTERS = {
 
 class Chapter:
     """Cette classe est utilisé pour définir un chapitre dans un manga, un chapitre posséde plusieurs pages (image récupérée depuis le site)"""
-    def __init__(self,id:int,manga_name:str,link:str, scraper: BaseScraper, output_dir:str="./export")->None:
+    def __init__(self,number:int|float,manga_title:str,url:str, scraper: BaseScraper, output_dir:str="./export")->None:
         """
         Cette fonction est appalée à chaque création d'un chapitre, elle permet de récupéré les informations en fonctions du lien et des sites supporté
 
         Args:
-            link (string): lien du chapitre sur le site de scan
+            number (int|float): numéro du chapitre (12 ou 12.5 pour un demi-chapitre)
+            url (string): lien du chapitre sur le site de scan
             output_dir (string): dossier dans lequel les chapitres convertis sont exportés
         """
-        self.id_chapter = id
-        self.manga_name = manga_name
-        self.folder_name = utils.safe_filename(manga_name)  # nom utilisable dans les chemins
+        # 12.0 est stocké comme 12 pour que les chemins et l'affichage restent "chapter_12"
+        self.number = int(number) if float(number).is_integer() else float(number)
+        self.manga_title = manga_title
+        self.folder_name = utils.safe_filename(manga_title)  # nom utilisable dans les chemins
         self.output_dir = output_dir
-        self.chapter_html_link = link
+        self.url = url
         self.scraper = scraper
-        self.pages_link = []
-        self.pages_path = []
+        self.page_urls = []
+        self.page_paths = []
 
-    def id(self):
-        return int(self.id_chapter) if float(self.id_chapter).is_integer() else float(self.id_chapter)
-
-    def export_path(self, format:str)->str:
+    def export_path(self, output_format:str)->str:
         """Retourne le chemin du fichier exporté pour un format donné (ex: ./export/<manga>/cbz/chapter_1.cbz)."""
-        extension = format.lower()
-        return os.path.join(self.output_dir, self.folder_name, extension, f"chapter_{self.id()}.{extension}")
+        extension = output_format.lower()
+        return os.path.join(self.output_dir, self.folder_name, extension, f"chapter_{self.number}.{extension}")
 
     def fetch_images(self, use_cache:bool=True)->bool:
         """
@@ -50,7 +49,7 @@ class Chapter:
         Args:
             use_cache (bool): réutiliser les images déjà téléchargées dans le dossier temporaire si elles sont complètes
         """
-        if self.pages_path:  # Déjà fait
+        if self.page_paths:  # Déjà fait
             return True
 
         max_retries = 5
@@ -58,58 +57,58 @@ class Chapter:
             if self._try_fetch_images(use_cache):
                 return True
             if attempt < max_retries:
-                print(f"⚠️ Problème lors du téléchargement du chapitre {self.id()}, tentative {attempt}/{max_retries}. Nouvel essai...")
+                print(f"⚠️ Problème lors du téléchargement du chapitre {self.number}, tentative {attempt}/{max_retries}. Nouvel essai...")
                 # Reset state for a clean retry
-                self.pages_link = []
-                self.pages_path = []
+                self.page_urls = []
+                self.page_paths = []
 
-        print(f"❌ Échec du téléchargement du chapitre {self.id()} après {max_retries} tentatives.")
+        print(f"❌ Échec du téléchargement du chapitre {self.number} après {max_retries} tentatives.")
         return False
 
     def _try_fetch_images(self, use_cache:bool)->bool:
         driver = None
         try:
             # Extraire les liens si pas déjà fait
-            if not self.pages_link:
-                self.pages_link,driver = self.scraper.get_chapter_images(self.chapter_html_link)
+            if not self.page_urls:
+                self.page_urls,driver = self.scraper.get_chapter_images(self.url)
 
-            if not self.pages_link:
-                print(f"❌ Pas de pages trouvées pour chapitre {self.id()}")
+            if not self.page_urls:
+                print(f"❌ Pas de pages trouvées pour chapitre {self.number}")
                 return False
 
             # Vérification spéciale : si une seule image est trouvée, c'est probablement une erreur
-            if len(self.pages_link) == 1:
-                print(f"⚠️ Une seule image a été trouvée pour le chapitre {self.id()}, ce qui signale une erreur probable. Tentative de rafraîchissement.")
+            if len(self.page_urls) == 1:
+                print(f"⚠️ Une seule image a été trouvée pour le chapitre {self.number}, ce qui signale une erreur probable. Tentative de rafraîchissement.")
                 return False
 
             # Télécharger les images
-            self.pages_path = self.__download_chapter_images(driver, use_cache)
+            self.page_paths = self._download_images(driver, use_cache)
 
-            if len(self.pages_path) != len(self.pages_link):
-                print(f"❌ Problème avec le téléchargement des images du chapitre {self.id()} (téléchargées: {len(self.pages_path)}, attendues: {len(self.pages_link)})")
+            if len(self.page_paths) != len(self.page_urls):
+                print(f"❌ Problème avec le téléchargement des images du chapitre {self.number} (téléchargées: {len(self.page_paths)}, attendues: {len(self.page_urls)})")
                 return False
             return True
         except Exception as e:
-            print(f"❌ Erreur lors de la récupération des images du chapitre {self.id()}: {e}")
+            print(f"❌ Erreur lors de la récupération des images du chapitre {self.number}: {e}")
             return False
 
-    def download(self, format:str, use_cache:bool=True)->bool:
+    def download(self, output_format:str, use_cache:bool=True)->bool:
         """Télécharge le chapitre et le convertit au format demandé (PDF, CBZ ou CBR)."""
-        if format not in CONVERTERS:
+        if output_format not in CONVERTERS:
             return self.fetch_images(use_cache)  # Aucun format = téléchargement seul
 
-        output_path = self.export_path(format)
+        output_path = self.export_path(output_format)
         if os.path.exists(output_path):
-            print(f"ℹ️  Le chapitre {self.id()} est déjà converti : {output_path}")
+            print(f"ℹ️  Le chapitre {self.number} est déjà converti : {output_path}")
             return True
 
         if not self.fetch_images(use_cache):
             return False
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        return CONVERTERS[format](self.pages_path, output_path)
+        return CONVERTERS[output_format](self.page_paths, output_path)
 
-    def __download_chapter_images(self,driver=None,use_cache:bool=True)->list[str]:
+    def _download_images(self,driver=None,use_cache:bool=True)->list[str]:
         """
         Cette méthode télécharge toutes les images d'un chapitre et les stocke dans un dossier temporaire.
         Si use_cache est vrai et que le cache contient toutes les images du chapitre, elles sont réutilisées.
@@ -117,13 +116,13 @@ class Chapter:
         Retour:
             list: Une liste contenant les chemins des fichiers téléchargés pour chaque image du chapitre.
         """
-        chapter_dir = os.path.join(tempfile.gettempdir(), self.folder_name, f"chapter_{self.id()}")
+        chapter_dir = os.path.join(tempfile.gettempdir(), self.folder_name, f"chapter_{self.number}")
         os.makedirs(chapter_dir, exist_ok=True)
 
         # Vérifier le cache
         cached_files = sorted(os.path.join(chapter_dir, f) for f in os.listdir(chapter_dir))
-        if use_cache and cached_files and len(cached_files) == len(self.pages_link):
-            print(f"✅ Chapitre {self.id()} : utilisation des {len(cached_files)} images du cache.")
+        if use_cache and cached_files and len(cached_files) == len(self.page_urls):
+            print(f"✅ Chapitre {self.number} : utilisation des {len(cached_files)} images du cache.")
             return cached_files
 
         for file_path in cached_files:
@@ -132,14 +131,14 @@ class Chapter:
         # Une seule session pour tout le chapitre : les cookies du navigateur (CAPTCHA) ne sont copiés
         # qu'une fois et la connexion au serveur d'images est réutilisée d'une image à l'autre
         session = utils.build_session(driver)
-        image_paths = [os.path.join(chapter_dir, f"{index:03d}.jpg") for index in range(1, len(self.pages_link) + 1)]
+        image_paths = [os.path.join(chapter_dir, f"{index:03d}.jpg") for index in range(1, len(self.page_urls) + 1)]
 
         def download(url, image_path):
             return utils.download_image(url, image_path, session=session, attempts=DOWNLOAD_ATTEMPTS)
 
-        print(f"📥 Chapitre {self.id()} : téléchargement de {len(self.pages_link)} images...")
+        print(f"📥 Chapitre {self.number} : téléchargement de {len(self.page_urls)} images...")
         with ThreadPoolExecutor(max_workers=PARALLEL_DOWNLOADS) as executor:
-            results = list(executor.map(download, self.pages_link, image_paths))
+            results = list(executor.map(download, self.page_urls, image_paths))
 
         # Chemins des images téléchargées, dans l'ordre des pages
         return [path for path, success in zip(image_paths, results) if success]

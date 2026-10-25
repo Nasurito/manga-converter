@@ -31,25 +31,25 @@ FORMATS = ["EPUB", "PDF", "CBZ", "CBR"]
 
 def process_manga(manga: Manga, use_cache: bool = True) -> None:
     """Affiche les informations du manga puis demande la plage de chapitres et le format à télécharger."""
-    if manga.manga_name is None:
+    if manga.title is None:
         print("❌ Impossible de récupérer les informations du manga. Vérifiez l'URL ou le support du site.")
         return
 
     print("ℹ️ Informations trouvées :")
-    manga.review()
+    manga.print_summary()
 
     try:
-        chapters_input = input("Entrez la plage de chapitres à télécharger (ex: '5' ou '1-10'): ")
-        start_chapter, end_chapter = parse_chapter_range(chapters_input)
+        range_input = input("Entrez la plage de chapitres à télécharger (ex: '5' ou '1-10'): ")
+        start_chapter, end_chapter = parse_chapter_range(range_input)
 
-        format_input = input(f"Entrez le format de sortie ({', '.join(FORMATS)}) [EPUB]: ").upper() or "EPUB"
-        if format_input not in FORMATS:
+        output_format = input(f"Entrez le format de sortie ({', '.join(FORMATS)}) [EPUB]: ").upper() or "EPUB"
+        if output_format not in FORMATS:
             print("⚠️ Format non valide. 'EPUB' sera utilisé par défaut.")
-            format_input = "EPUB"
+            output_format = "EPUB"
 
-        print(f"▶️  Lancement du téléchargement des chapitres de {start_chapter} à {end_chapter} au format {format_input}...")
+        print(f"▶️  Lancement du téléchargement des chapitres de {start_chapter} à {end_chapter} au format {output_format}...")
 
-        if manga.download(start_chapter, end_chapter, format_input, use_cache):
+        if manga.download(start_chapter, end_chapter, output_format, use_cache):
             print("\n✅ Opération terminée avec succès.")
         else:
             print("\n❌ Une erreur est survenue durant l'opération.")

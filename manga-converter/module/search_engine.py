@@ -43,19 +43,19 @@ class SearchEngine:
         if not languages:
             return None
 
-        list_to_use = self.results[languages[0]]
+        choices = self.results[languages[0]]
         if len(languages) > 1:
             print("Quelle langue vous intéresse ?")
             for i, language in enumerate(languages, start=1):
                 print(f"{i} : {LANGUAGES.get(language, language.upper())}")
-            list_to_use = self.results[languages[self._ask_index(len(languages))]]
+            choices = self.results[languages[self._ask_index(len(languages))]]
 
         print("Liste des manga:")
-        for i, (title, _) in enumerate(list_to_use, start=1):
+        for i, (title, _) in enumerate(choices, start=1):
             print(i," : ",title)
         print("Selectionner le numéro du manga à traiter")
 
-        _, url = list_to_use[self._ask_index(len(list_to_use))]
+        _, url = choices[self._ask_index(len(choices))]
         return url
 
     def _ask_index(self, size:int)->int:

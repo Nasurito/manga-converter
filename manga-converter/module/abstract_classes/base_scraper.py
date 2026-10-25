@@ -41,7 +41,7 @@ class BaseScraper(ABC):
         pass
 
     @abstractmethod
-    def do_require_driver(self) -> bool:
+    def requires_driver(self) -> bool:
         """
         Indique si le scraper nécessite un driver pour fonctionner.
         Doit être implémenté par les sous-classes.
@@ -68,25 +68,25 @@ class BaseScraper(ABC):
         Avec un driver, ready_selector/min_count indiquent quand la page est chargée et prepare_page
         permet d'agir sur la page pendant l'attente (voir utils.wait_for_page).
         """
-        return utils.get_page(url, self.do_require_driver(), driver, referer=self.base_url,
+        return utils.get_page(url, self.requires_driver(), driver, referer=self.base_url,
                               ready_selector=ready_selector, min_count=min_count, prepare_page=prepare_page)
 
-    def download_cover(self, cover_url: str, manga_name: str, driver: uc.Chrome = None) -> str:
+    def download_cover(self, cover_url: str, manga_title: str, driver: uc.Chrome = None) -> str:
         """Télécharge la couverture dans le dossier temporaire du manga et retourne son chemin (ou None)."""
         if not cover_url:
             return None
-        root_dir = os.path.join(tempfile.gettempdir(), utils.safe_filename(manga_name))
+        root_dir = os.path.join(tempfile.gettempdir(), utils.safe_filename(manga_title))
         os.makedirs(root_dir, exist_ok=True)
         cover_path = os.path.join(root_dir, "thumb.jpg")
         return cover_path if utils.download_image(cover_url, cover_path, driver) else None
 
-    def parse_chapterlist(self, soup, fallback_pattern: str, fallback_on_href: bool = False) -> list[dict]:
+    def parse_chapter_list(self, soup, fallback_pattern: str, fallback_on_href: bool = False) -> list[dict]:
         """
         Parse la liste '#chapterlist li' utilisée par les sites basés sur le thème WordPress MangaReader.
         Le numéro est lu dans l'attribut 'data-num', sinon extrait avec fallback_pattern
         depuis le texte du lien (ou son href si fallback_on_href).
         """
-        chapters_data = []
+        chapters = []
         for li in soup.select('#chapterlist li'):
             link_tag = li.select_one('a[href]')
             if not link_tag:
@@ -98,11 +98,11 @@ class BaseScraper(ABC):
                 match = re.search(fallback_pattern, source, re.IGNORECASE)
                 number = match.group(1) if match else "0"
 
-            chapters_data.append({
-                "id": utils.normalize_volume(number),
-                "link": link_tag['href']
+            chapters.append({
+                "number": utils.extract_chapter_number(number),
+                "url": link_tag['href']
             })
-        return chapters_data
+        return chapters
 
     def parse_ts_reader(self, html_page: str) -> list[str]:
         """

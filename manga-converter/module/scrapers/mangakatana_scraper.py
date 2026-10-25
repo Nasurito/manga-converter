@@ -26,30 +26,30 @@ class MangakatanaScraper(BaseScraper):
 
         # Nom du manga
         title_tag = soup.select_one('h1.heading')
-        details['manga_name'] = title_tag.text.strip() if title_tag else "Nom inconnu"
+        details['title'] = title_tag.text.strip() if title_tag else "Nom inconnu"
 
         # Auteur
         author_tag = soup.select_one('a.author')
         details['author'] = author_tag.text.strip() if author_tag else "Auteur inconnu"
 
         # Genres
-        details['manga_genres'] = [tag.text.strip() for tag in soup.select('.info .genres a')]
+        details['genres'] = [tag.text.strip() for tag in soup.select('.info .genres a')]
 
         # Couverture
         cover_tag = soup.select_one('#single_book .cover img')
-        details['cover'] = self.download_cover(cover_tag.get('src') if cover_tag else None, details['manga_name'], driver)
+        details['cover'] = self.download_cover(cover_tag.get('src') if cover_tag else None, details['title'], driver)
 
         # Chapitres
-        chapters_data = []
+        chapters = []
         for link_tag in soup.select('.chapters table.uk-table-striped tr a[href]'):
             match = re.search(r'Chapter\s*([\d\.]+)', link_tag.text)
             if match:
-                chapters_data.append({
-                    "id": utils.normalize_volume(match.group(1)),
-                    "link": link_tag['href']
+                chapters.append({
+                    "number": utils.extract_chapter_number(match.group(1)),
+                    "url": link_tag['href']
                 })
 
-        details['chapters_data'] = chapters_data
+        details['chapters'] = chapters
         return details
 
     def get_chapter_images(self, chapter_url: str) -> tuple[list,None]:
@@ -87,5 +87,5 @@ class MangakatanaScraper(BaseScraper):
         """
         return "en"
 
-    def do_require_driver(self) -> bool:
+    def requires_driver(self) -> bool:
         return False

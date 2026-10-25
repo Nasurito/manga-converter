@@ -7,7 +7,7 @@ import utils
 from module.chapter import Chapter
 from module.scrapers import get_scraper_from_domain
 
-def epub_image_content(img_path:str)->bytes:
+def prepare_epub_image(img_path:str)->bytes:
     """
     Prépare une page pour l'EPUB et retourne son contenu JPEG : les pages en paysage sont tournées
     pour tenir sur l'écran. Tout se fait en mémoire, l'image du cache n'est pas modifiée
@@ -29,44 +29,44 @@ def epub_image_content(img_path:str)->bytes:
 
 class Manga:
     """Cette classe est utilisé pour définir un manga, un manga possede plusieurs chapitres (objet de la classe chapitre)"""
-    def __init__(self,link:str,output_dir:str="./export")->None:
+    def __init__(self,url:str,output_dir:str="./export")->None:
         """Cette methode est appalée à chaque création d'un manga, elle permet de récupéré les informations en fonction du lien et des sites supporté
         Args:
             link (string): lien du manga sur le site de scan
             output_dir (string): dossier dans lequel les fichiers sont exportés
         """
         
-        self.domain_name = utils.get_domain(link)
-        self.link = link
+        self.domain = utils.get_domain(url)
+        self.url = url
         self.output_dir = output_dir
-        self.scraper = get_scraper_from_domain(self.domain_name)
+        self.scraper = get_scraper_from_domain(self.domain)
         
         if not self.scraper:
-            raise Exception(f"Le site {self.domain_name} n'est pas supporté par le programme")
+            raise Exception(f"Le site {self.domain} n'est pas supporté par le programme")
         
         try:
-            details = self.scraper.get_manga_details(self.link)
+            details = self.scraper.get_manga_details(self.url)
         except Exception:
             self.close()
             raise
         
         if details:
-            self.manga_name = details.get('manga_name')
+            self.title = details.get('title')
             self.author = details.get('author')
-            self.manga_genres = details.get('manga_genres', [])
+            self.genres = details.get('genres', [])
             self.cover = details.get('cover')
-            self.manga_chapters = [
+            self.chapters = [
                 Chapter(
-                    id=chap_data['id'],
-                    manga_name=self.manga_name,
-                    link=chap_data['link'],
+                    number=chapter_data['number'],
+                    manga_title=self.title,
+                    url=chapter_data['url'],
                     scraper=self.scraper,  # On passe l'instance du scraper au chapitre
                     output_dir=self.output_dir
-                ) for chap_data in details.get('chapters_data', [])
+                ) for chapter_data in details.get('chapters', [])
             ]
         else:
             # Initialisation en cas d'échec du scraping
-            self.manga_name, self.author, self.manga_genres, self.manga_chapters, self.cover = None, None, [], [], None
+            self.title, self.author, self.genres, self.chapters, self.cover = None, None, [], [], None
 
     def close(self)->None:
         """Libère les ressources du scraper (ex: ferme le navigateur ouvert pour le CAPTCHA)."""
@@ -78,7 +78,7 @@ class Manga:
     def __exit__(self, *exc_info):
         self.close()
 
-    def review(self):
+    def print_summary(self):
         """
         Cette fonction permet d'afficher les informations relative a un manga sous cette forme :
         Nom                : lorem ipsum
@@ -86,46 +86,46 @@ class Manga:
         Genres             : lorem, ipsume, dolores
         Nombre de chapitre : xxx
         """
-        print("Nom                :",self.manga_name)
+        print("Nom                :",self.title)
         print("Autheur            :",self.author)
-        print("Genres             :",self.manga_genres)
+        print("Genres             :",self.genres)
         
-        ids = [chapter.id() for chapter in self.manga_chapters]
-        print("Nombre de chapitre :", min(ids, default=0) ,"-", max(ids, default=0))
+        numbers = [chapter.number for chapter in self.chapters]
+        print("Nombre de chapitre :", min(numbers, default=0) ,"-", max(numbers, default=0))
         print("\n")
     
-    def download_chapters(self, chapter_start:float, chapter_end:float,format:str="CBZ",use_cache:bool=True)->bool:
+    def download_chapters(self, start_chapter:float, end_chapter:float,output_format:str="CBZ",use_cache:bool=True)->bool:
         """
         Télécharge une plage de chapitres dans le format demandé.
 
         Args:
-            chapter_start (float): Numéro du premier chapitre à télécharger (inclus).
-            chapter_end (float): Numéro du dernier chapitre à télécharger (inclus).
+            start_chapter (float): Numéro du premier chapitre à télécharger (inclus).
+            end_chapter (float): Numéro du dernier chapitre à télécharger (inclus).
 
         Returns:
             bool: True si tous les chapitres ont été téléchargés.
         """
-        chapters = sorted((c for c in self.manga_chapters if chapter_start <= c.id() <= chapter_end), key=lambda c: c.id())
+        chapters = sorted((c for c in self.chapters if start_chapter <= c.number <= end_chapter), key=lambda c: c.number)
         if not chapters:
-            print(f"❌ Aucun chapitre entre {chapter_start} et {chapter_end} pour ce manga sur le site {self.domain_name}")
+            print(f"❌ Aucun chapitre entre {start_chapter} et {end_chapter} pour ce manga sur le site {self.domain}")
             return False
 
         success = True
         for chapter in chapters:
-            if chapter.download(format, use_cache):
-                print(f"Chapitre {chapter.id()}, téléchargé")
+            if chapter.download(output_format, use_cache):
+                print(f"Chapitre {chapter.number}, téléchargé")
             else:
-                print(f"Erreur de téléchargement du chapitre {chapter.id()}")
+                print(f"Erreur de téléchargement du chapitre {chapter.number}")
                 success = False
         return success
 
-    def download(self, chapter_start:float, chapter_end:float, format:str="EPUB", use_cache:bool=True)->bool:
+    def download(self, start_chapter:float, end_chapter:float, output_format:str="EPUB", use_cache:bool=True)->bool:
         """Télécharge une plage de chapitres au format demandé (EPUB, PDF, CBZ ou CBR)."""
-        if format == "EPUB":
-            return self.download_chapter_to_epub(chapter_start, chapter_end, use_cache)
-        return self.download_chapters(chapter_start, chapter_end, format, use_cache)
+        if output_format == "EPUB":
+            return self.download_epub(start_chapter, end_chapter, use_cache)
+        return self.download_chapters(start_chapter, end_chapter, output_format, use_cache)
 
-    def download_chapter_to_epub(self, start_chapter:float, end_chapter:float=None, use_cache:bool=True)->bool:
+    def download_epub(self, start_chapter:float, end_chapter:float=None, use_cache:bool=True)->bool:
 
         """
         Cette fonction permet de télécharger un ou plusieurs chapitres d'un manga et de les convertir en un seul fichier epub
@@ -137,19 +137,19 @@ class Manga:
         if end_chapter is None:
             end_chapter = start_chapter
 
-        list_of_chapter_ids = [chapter.id() for chapter in self.manga_chapters]
-        if start_chapter not in list_of_chapter_ids:
-            print(f"❌ Le chapitre {start_chapter} n'existe pas pour ce manga sur le site {self.domain_name}")
+        chapter_numbers = [chapter.number for chapter in self.chapters]
+        if start_chapter not in chapter_numbers:
+            print(f"❌ Le chapitre {start_chapter} n'existe pas pour ce manga sur le site {self.domain}")
             return False
-        elif end_chapter not in list_of_chapter_ids:
-            print(f"❌ Le chapitre {end_chapter} n'existe pas pour ce manga sur le site {self.domain_name}")
+        elif end_chapter not in chapter_numbers:
+            print(f"❌ Le chapitre {end_chapter} n'existe pas pour ce manga sur le site {self.domain}")
             return False
 
 
         book = epub.EpubBook()
 
-        book.set_identifier(self.manga_name)
-        book.set_title(self.manga_name)
+        book.set_identifier(self.title)
+        book.set_title(self.title)
         language = self.scraper.get_language()
         book.set_language(language)
         book.add_author(self.author)
@@ -161,33 +161,33 @@ class Manga:
         spine = ['nav']
         toc = []
 
-        chapters_to_process = [ch for ch in self.manga_chapters if start_chapter <= ch.id() <= end_chapter]
-        chapters_to_process = sorted(chapters_to_process, key=lambda c: c.id())
+        chapters_to_process = [ch for ch in self.chapters if start_chapter <= ch.number <= end_chapter]
+        chapters_to_process = sorted(chapters_to_process, key=lambda c: c.number)
 
         for chapter in chapters_to_process:
-            print(f"📥 Traitement du chapitre {chapter.id()}...")
+            print(f"📥 Traitement du chapitre {chapter.number}...")
 
             if not chapter.fetch_images(use_cache):
-                print(f"❌ Échec téléchargement chapitre {chapter.id()}")
+                print(f"❌ Échec téléchargement chapitre {chapter.number}")
                 continue
 
             first_page_file = None
 
-            for i, img_path in enumerate(chapter.pages_path, 1):
+            for i, img_path in enumerate(chapter.page_paths, 1):
                 img_name = os.path.basename(img_path)
 
                 img_item = epub.EpubItem(
-                    uid=f"img_{chapter.id()}_{i}",
-                    file_name=f"images/chapter_{chapter.id()}/{img_name}",
+                    uid=f"img_{chapter.number}_{i}",
+                    file_name=f"images/chapter_{chapter.number}/{img_name}",
                     media_type="image/jpeg",
-                    content=epub_image_content(img_path)
+                    content=prepare_epub_image(img_path)
                 )
                 book.add_item(img_item)
 
                 page = epub.EpubHtml(
-                    uid=f"chap_{chapter.id()}_page_{i}",
+                    uid=f"chap_{chapter.number}_page_{i}",
                     title=None,
-                    file_name=f"chapter_{chapter.id()}_page_{i}.xhtml",
+                    file_name=f"chapter_{chapter.number}_page_{i}.xhtml",
                     lang=language
                 )
 
@@ -219,7 +219,7 @@ class Manga:
     </style>
     </head>
     <body>
-    <img src="images/chapter_{chapter.id()}/{img_name}" alt="Page"/>
+    <img src="images/chapter_{chapter.number}/{img_name}" alt="Page"/>
     </body>
     </html>""")
 
@@ -230,7 +230,7 @@ class Manga:
 
             if first_page_file:
                 first_page_file.title = " "
-                toc.append(epub.Link(first_page_file.file_name, f"Chapitre {chapter.id()}", first_page_file.id))
+                toc.append(epub.Link(first_page_file.file_name, f"Chapitre {chapter.number}", first_page_file.id))
 
         book.toc = tuple(toc)
         book.spine = spine
@@ -239,7 +239,7 @@ class Manga:
         book.add_item(epub.EpubNcx())
         book.add_item(epub.EpubNav())
 
-        folder_name = utils.safe_filename(self.manga_name)
+        folder_name = utils.safe_filename(self.title)
         output_path = os.path.join(self.output_dir, folder_name, f"{folder_name}_{start_chapter}")
         if start_chapter != end_chapter:
             output_path += f"-{end_chapter}"

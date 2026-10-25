@@ -113,16 +113,29 @@ def wait_for_page(driver:uc.Chrome, ready_selector:str=None, min_count:int=1, ti
         print("ATTENTION : Résolvez le CAPTCHA dans la fenêtre ouverte.")
     input("Appuyez sur Entrée ici une fois le contenu chargé...")
 
-def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,referer:str=None,
+def create_driver()->uc.Chrome:
+    """
+    Ouvre le navigateur utilisé pour les sites protégés par CAPTCHA.
+    C'est le seul endroit qui crée le navigateur : pour changer de bibliothèque, il suffit de modifier cette fonction.
+    """
+    # Options pour rendre la navigation plus humaine
+    options = uc.ChromeOptions()
+    # options.add_argument('--headless') # Ne pas utiliser le mode headless (sans fenêtre) pour les CAPTCHAs !
+    # Initialisation du driver "indétecté", aligné sur la version du Chrome installé
+    driver = uc.Chrome(options=options, version_main=get_chrome_major_version())
+    driver.set_script_timeout(120)
+    return driver
+
+def get_page(url:str,requires_driver:bool,driver:uc.Chrome=None,referer:str=None,
              ready_selector:str=None,min_count:int=1,
              prepare_page:Callable[[uc.Chrome], None]=None)->tuple[str,uc.Chrome]:
     """
     Cette fonction permet de récupéré le contenue d'une page web sous format HTML
 
     Args:
-        url_request (string): l'url de la page a récupéré (par exemple www.google.com)
-        require_driver (bool): utiliser un navigateur (nécessaire pour les sites protégés par CAPTCHA)
-        passed_driver (uc.Chrome): driver déjà ouvert à réutiliser
+        url (string): l'url de la page a récupéré (par exemple www.google.com)
+        requires_driver (bool): utiliser un navigateur (nécessaire pour les sites protégés par CAPTCHA)
+        driver (uc.Chrome): navigateur déjà ouvert à réutiliser (sinon un nouveau est ouvert si nécessaire)
         referer (string): Referer à envoyer avec la requête (sans driver uniquement)
         ready_selector (string): sélecteur CSS indiquant que la page est chargée (avec driver uniquement, voir wait_for_page)
         min_count (int): nombre minimum d'éléments correspondant à ready_selector
@@ -131,38 +144,27 @@ def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,re
     Returns:
         tuple: Le contenu de la page sous format HTML (ou None si une érreur s'est produite) et le driver utilisé
     """
-    return_value = None
-    driver = None
+    html = None
 
-    if require_driver:
-
-        if passed_driver:
-            driver = passed_driver
-        else:
-            # Options pour rendre la navigation plus humaine
-            options = uc.ChromeOptions()
-            # options.add_argument('--headless') # Ne pas utiliser le mode headless (sans fenêtre) pour les CAPTCHAs !
-            # Initialisation du driver "indétecté"
-            # On aligne le chromedriver sur la version du Chrome installé
-            driver = uc.Chrome(options=options, version_main=get_chrome_major_version())
-            driver.set_script_timeout(120)
-
+    if requires_driver:
+        driver = driver or create_driver()
         try:
             print("Chargement de la page...")
-            driver.get(url_request)
+            driver.get(url)
             wait_for_page(driver, ready_selector, min_count, prepare_page=prepare_page)
 
             # Récupération des données
-            return_value = driver.page_source
+            html = driver.page_source
             print("Contenu récupéré !")
         except Exception as e:
             print(f"Une erreur est survenue : {e}")
     else:
+        driver = None
         try:
-            response = build_session(referer=referer).get(url_request, timeout=20)
+            response = build_session(referer=referer).get(url, timeout=20)
             response.raise_for_status()
             response.encoding = 'utf-8'
-            return_value = response.text
+            html = response.text
         except requests.exceptions.HTTPError as error:
             print("An HTTP error occurred:", error)
         except requests.exceptions.ReadTimeout:
@@ -172,7 +174,7 @@ def get_page(url_request:str,require_driver:bool,passed_driver:uc.Chrome=None,re
         except requests.exceptions.RequestException as error:
             print("An unexpected error occurred:", error)
 
-    return return_value,driver # Retourner le resultat de la requete
+    return html,driver # Retourner le resultat de la requete
 
 def download_image(url:str, filename:str, driver:uc.Chrome=None, session:requests.Session=None, attempts:int=1)->bool:
     """
@@ -253,7 +255,7 @@ def images_to_cbz(image_paths:list[str], cbz_path:str)->bool:
     print(f'Conversion en CBZ terminée : {cbz_path}')
     return True
 
-def normalize_volume(label: str) -> int|float:
+def extract_chapter_number(label: str) -> int|float:
     """
     Extrait le numéro de chapitre d'un texte, en gardant les demi-chapitres.
     Exemples: '12' -> 12, '271.5' -> 271.5, '168.5 (VUS)' -> 168.5, 'Chapitre 3' -> 3

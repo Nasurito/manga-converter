@@ -18,8 +18,8 @@ class FakeScraper:
     def get_manga_details(self, url):
         if self.fail:
             raise RuntimeError("page introuvable")
-        return {"manga_name": "Test", "author": "A", "manga_genres": [], "cover": None,
-                "chapters_data": [{"id": 1, "link": "c1"}, {"id": 1.5, "link": "c1.5"}]}
+        return {"title": "Test", "author": "A", "genres": [], "cover": None,
+                "chapters": [{"number": 1, "url": "c1"}, {"number": 1.5, "url": "c1.5"}]}
 
     def search(self, key_word):
         return self.results
@@ -40,8 +40,8 @@ def test_manga_context_manager_closes_scraper(monkeypatch):
     monkeypatch.setattr(module.manga, "get_scraper_from_domain", lambda domain: FakeScraper())
 
     with Manga("https://site.com/manga", output_dir="out") as manga:
-        assert [c.id() for c in manga.manga_chapters] == [1, 1.5]
-        assert manga.manga_chapters[0].output_dir == "out"
+        assert [c.number for c in manga.chapters] == [1, 1.5]
+        assert manga.chapters[0].output_dir == "out"
         assert not manga.scraper.closed
 
     assert manga.scraper.closed

@@ -21,7 +21,7 @@ class SushiscanScraper(BaseScraper):
 
         # Titre
         title_tag = soup.select_one('h1.entry-title')
-        details['manga_name'] = title_tag.text.strip() if title_tag else "Inconnu"
+        details['title'] = title_tag.text.strip() if title_tag else "Inconnu"
 
         # Auteur
         # Sushiscan utilise souvent un tableau ou des listes pour les infos
@@ -30,14 +30,14 @@ class SushiscanScraper(BaseScraper):
         details['author'] = next_td.text.strip() if next_td else "Inconnu"
 
         # Genres
-        details['manga_genres'] = [tag.text.strip() for tag in soup.select('.seriestugenre a')]
+        details['genres'] = [tag.text.strip() for tag in soup.select('.seriestugenre a')]
 
         # Couverture
         cover_tag = soup.select_one('.thumb img')
-        details['cover'] = self.download_cover(cover_tag.get('src') if cover_tag else None, details['manga_name'], self.driver)
+        details['cover'] = self.download_cover(cover_tag.get('src') if cover_tag else None, details['title'], self.driver)
 
         # Chapitres
-        details['chapters_data'] = self.parse_chapterlist(soup, r'chapter-([\d\.]+)', fallback_on_href=True)
+        details['chapters'] = self.parse_chapter_list(soup, r'chapter-([\d\.]+)', fallback_on_href=True)
         return details
 
     def get_chapter_images(self, chapter_url: str) -> tuple[list,object]:
@@ -82,5 +82,5 @@ class SushiscanScraper(BaseScraper):
         """
         return "fr"
 
-    def do_require_driver(self) -> bool:
+    def requires_driver(self) -> bool:
         return True

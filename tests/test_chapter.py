@@ -17,7 +17,7 @@ class FakeScraper:
         self.calls += 1
         return ["https://img/1.jpg", "https://img/2.jpg", "https://img/3.jpg"], None
 
-    def do_require_driver(self):
+    def requires_driver(self):
         return False
 
 
@@ -38,10 +38,10 @@ def workspace(tmp_path, monkeypatch):
     return downloads
 
 
-def test_id_keeps_half_chapters():
-    assert Chapter(12, "M", "x", FakeScraper()).id() == 12
-    assert Chapter(12.5, "M", "x", FakeScraper()).id() == 12.5
-    assert Chapter(12.0, "M", "x", FakeScraper()).id() == 12
+def test_number_keeps_half_chapters():
+    assert Chapter(12, "M", "x", FakeScraper()).number == 12
+    assert Chapter(12.5, "M", "x", FakeScraper()).number == 12.5
+    assert Chapter(12.0, "M", "x", FakeScraper()).number == 12
 
 
 def test_export_path():
@@ -71,7 +71,7 @@ def test_cache_is_reused_without_asking(workspace, no_prompt):
     chapter = Chapter(1, "Manga", "x", FakeScraper())
     assert chapter.fetch_images(use_cache=True) is True
     assert workspace == []  # aucune image re-téléchargée
-    assert len(chapter.pages_path) == 3
+    assert len(chapter.page_paths) == 3
 
 
 def test_cache_is_ignored_with_use_cache_false(workspace, no_prompt):
@@ -83,7 +83,7 @@ def test_cache_is_ignored_with_use_cache_false(workspace, no_prompt):
     assert len(workspace) == 3  # toutes les images re-téléchargées
 
 
-def test_unsafe_manga_name_is_cleaned_in_paths(workspace, no_prompt):
+def test_unsafe_manga_title_is_cleaned_in_paths(workspace, no_prompt):
     chapter = Chapter(1, "Re:Zero / Arc 1?", "x", FakeScraper(), output_dir="mes_mangas")
 
     assert chapter.export_path("CBZ") == os.path.join("mes_mangas", "Re_Zero _ Arc 1_", "cbz", "chapter_1.cbz")
@@ -119,7 +119,7 @@ def test_one_session_for_the_whole_chapter_and_pages_stay_in_order(workspace, mo
 
     assert sessions == ["driver"]  # cookies du navigateur copiés une seule fois
     assert set(received) == {"session"}
-    assert [open(p).read() for p in chapter.pages_path] == [f"https://img/{i}.jpg" for i in range(1, 21)]
+    assert [open(p).read() for p in chapter.page_paths] == [f"https://img/{i}.jpg" for i in range(1, 21)]
 
 
 def test_failed_image_makes_the_chapter_retry(workspace, monkeypatch, no_prompt):
@@ -139,4 +139,4 @@ def test_failed_image_makes_the_chapter_retry(workspace, monkeypatch, no_prompt)
 
     assert chapter.fetch_images() is True
     assert scraper.calls == 2
-    assert len(chapter.pages_path) == 3
+    assert len(chapter.page_paths) == 3

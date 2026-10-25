@@ -11,8 +11,8 @@ import utils
     ("12.0", 12),
     ("pas de numéro", None),
 ])
-def test_normalize_volume(label, expected):
-    result = utils.normalize_volume(label)
+def test_extract_chapter_number(label, expected):
+    result = utils.extract_chapter_number(label)
     assert result == expected
     assert type(result) is type(expected)
 

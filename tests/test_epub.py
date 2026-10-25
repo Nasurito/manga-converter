@@ -3,11 +3,11 @@ import os
 
 from PIL import Image
 
-from module.manga import epub_image_content
+from module.manga import prepare_epub_image
 
 
-def save_image(path, size, format, mode="RGB"):
-    Image.new(mode, size, "white").save(path, format=format)
+def save_image(path, size, image_format, mode="RGB"):
+    Image.new(mode, size, "white").save(path, format=image_format)
     with open(path, "rb") as f:
         return f.read()
 
@@ -16,7 +16,7 @@ def test_landscape_page_is_rotated_without_touching_the_cache(tmp_path):
     path = tmp_path / "001.jpg"
     original = save_image(path, (300, 200), "JPEG")
 
-    content = epub_image_content(str(path))
+    content = prepare_epub_image(str(path))
 
     with Image.open(io.BytesIO(content)) as page:
         assert page.format == "JPEG"
@@ -30,7 +30,7 @@ def test_png_is_converted_to_jpeg_without_touching_the_cache(tmp_path):
     path = tmp_path / "002.jpg"
     original = save_image(path, (200, 300), "PNG", mode="RGBA")
 
-    content = epub_image_content(str(path))
+    content = prepare_epub_image(str(path))
 
     with Image.open(io.BytesIO(content)) as page:
         assert page.format == "JPEG"
@@ -43,4 +43,4 @@ def test_portrait_jpeg_is_kept_as_is(tmp_path):
     path = tmp_path / "003.jpg"
     original = save_image(path, (200, 300), "JPEG")
 
-    assert epub_image_content(str(path)) == original  # pas de recompression
+    assert prepare_epub_image(str(path)) == original  # pas de recompression

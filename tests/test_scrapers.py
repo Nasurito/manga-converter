@@ -6,28 +6,28 @@ from module.scrapers.mangakatana_scraper import MangakatanaScraper
 from module.scrapers.sushiscan_scraper import SushiscanScraper
 
 
-def chapter_ids(details):
-    return [chapter["id"] for chapter in details["chapters_data"]]
+def chapter_numbers(details):
+    return [chapter["number"] for chapter in details["chapters"]]
 
 
 def test_lelmanga_manga_details(offline_pages):
     offline_pages({"manga": "lelmanga-manga.html"})
     details = LelmangaScraper().get_manga_details("manga")
 
-    assert details["manga_name"] == "Jujutsu Kaisen"
+    assert details["title"] == "Jujutsu Kaisen"
     assert details["author"] == "Akutami Gege"
-    assert "Action" in details["manga_genres"]
-    assert len(details["chapters_data"]) == 274
-    assert details["chapters_data"][0] == {"id": 271.5, "link": "https://www.lelmanga.com/jujutsu-kaisen-271-5/"}
+    assert "Action" in details["genres"]
+    assert len(details["chapters"]) == 274
+    assert details["chapters"][0] == {"number": 271.5, "url": "https://www.lelmanga.com/jujutsu-kaisen-271-5/"}
 
 
 def test_lelmanga_keeps_half_chapters(offline_pages):
     offline_pages({"manga": "lelmanga-manga.html"})
-    ids = chapter_ids(LelmangaScraper().get_manga_details("manga"))
+    numbers = chapter_numbers(LelmangaScraper().get_manga_details("manga"))
 
     # 271.5 ne doit plus être confondu avec 271, et "168.5 (VUS)" doit être lu comme 168.5
-    assert {271, 271.5, 262.5, 168.5} <= set(ids)
-    assert len(ids) == len(set(ids)), "deux chapitres ont le même numéro"
+    assert {271, 271.5, 262.5, 168.5} <= set(numbers)
+    assert len(numbers) == len(set(numbers)), "deux chapitres ont le même numéro"
 
 
 def test_lelmanga_chapter_images(offline_pages):
@@ -43,19 +43,19 @@ def test_mangakatana_manga_details(offline_pages):
     offline_pages({"manga": "mangakatana-manga.html"})
     details = MangakatanaScraper().get_manga_details("manga")
 
-    assert details["manga_name"] == "Kaiju No. 8"
+    assert details["title"] == "Kaiju No. 8"
     assert details["author"] == "Matsumoto Naoya"
-    assert "Shounen" in details["manga_genres"]
-    assert len(details["chapters_data"]) == 122
-    assert details["chapters_data"][0] == {"id": 121, "link": "https://mangakatana.com/manga/kaiju-no-8.24869/c121"}
+    assert "Shounen" in details["genres"]
+    assert len(details["chapters"]) == 122
+    assert details["chapters"][0] == {"number": 121, "url": "https://mangakatana.com/manga/kaiju-no-8.24869/c121"}
 
 
 def test_mangakatana_keeps_half_chapters(offline_pages):
     offline_pages({"manga": "mangakatana-manga.html"})
-    ids = chapter_ids(MangakatanaScraper().get_manga_details("manga"))
+    numbers = chapter_numbers(MangakatanaScraper().get_manga_details("manga"))
 
-    assert {11, 11.5, 12} <= set(ids)
-    assert len(ids) == len(set(ids)), "deux chapitres ont le même numéro"
+    assert {11, 11.5, 12} <= set(numbers)
+    assert len(numbers) == len(set(numbers)), "deux chapitres ont le même numéro"
 
 
 def test_mangakatana_chapter_images(offline_pages):
@@ -74,11 +74,11 @@ def test_chapterlist_fallback_on_href():
             <li data-num="12.5"><a href="https://sushiscan.fr/test-chapter-12/">Chapitre</a></li>
         </ul>""", "html.parser")
 
-    chapters = SushiscanScraper().parse_chapterlist(soup, r'chapter-([\d\.]+)', fallback_on_href=True)
+    chapters = SushiscanScraper().parse_chapter_list(soup, r'chapter-([\d\.]+)', fallback_on_href=True)
 
     assert chapters == [
-        {"id": 13, "link": "https://sushiscan.fr/test-chapter-13/"},
-        {"id": 12.5, "link": "https://sushiscan.fr/test-chapter-12/"},  # data-num est prioritaire
+        {"number": 13, "url": "https://sushiscan.fr/test-chapter-13/"},
+        {"number": 12.5, "url": "https://sushiscan.fr/test-chapter-12/"},  # data-num est prioritaire
     ]
 
 
@@ -128,12 +128,12 @@ def test_sushiscan_manga_details(offline_pages):
     offline_pages({"manga": "sushiscan-manga.html"})
     details = SushiscanScraper().get_manga_details("manga")
 
-    assert details["manga_name"] == "Assassination Classroom"
+    assert details["title"] == "Assassination Classroom"
     assert details["author"] == "Matsui Yusei"
-    assert details["manga_genres"] == ["Action", "Comédie", "School-Life", "Science-Fiction"]
+    assert details["genres"] == ["Action", "Comédie", "School-Life", "Science-Fiction"]
     # Sushiscan numérote en volumes ("Volume 21")
-    assert chapter_ids(details) == list(range(21, 0, -1))
-    assert details["chapters_data"][-1]["link"] == "https://sushiscan.net/assassination-classroom-volume-1/"
+    assert chapter_numbers(details) == list(range(21, 0, -1))
+    assert details["chapters"][-1]["url"] == "https://sushiscan.net/assassination-classroom-volume-1/"
 
 
 def test_sushiscan_chapter_images_do_not_depend_on_reading_mode(offline_pages):
